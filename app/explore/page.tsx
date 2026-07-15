@@ -22,7 +22,6 @@ import {
   Plus,
   Volume2,
   VolumeX,
-  Sparkles,
   Eye,
   Compass,
   Waves,
@@ -36,36 +35,12 @@ import { SignalCard } from "@/components/explore/SignalCard";
 import { ExploreMiniMap } from "@/components/explore/ExploreMiniMap";
 import { AnonymousIdentityBadge } from "@/components/onboarding/AnonymousIdentityBadge";
 import { useAppState } from "@/context/AppStateContext";
+import { useT } from "@/context/LanguageContext";
+import { LangSwitcher } from "@/components/ui/LangSwitcher";
 import { Signal } from "@/lib/mockSignals";
 import { playOpenSignal } from "@/lib/sound";
 
 type Space = "sky" | "ocean";
-
-// =====================================================
-// WHISPER TEXTS
-// =====================================================
-const SKY_WHISPERS = [
-  "Mỗi ngôi sao là một câu chuyện ai đó đang giữ...",
-  "Chạm vào ánh sáng — để nghe điều chưa kể",
-  "Có ai đó ngoài kia cũng đang nhìn lên bầu trời này",
-  "Đêm nay vũ trụ có thêm một câu chuyện mới",
-  "Kéo để khám phá — bạn không cô đơn đâu",
-];
-
-const OCEAN_WHISPERS = [
-  "Những bong bóng đang trôi nhẹ dưới lòng biển...",
-  "Chạm vào một bong bóng — nghe lời thì thầm",
-  "Ai đó vừa thả điều họ giữ rất lâu xuống đây",
-  "Đại dương giữ mọi bí mật, không phán xét",
-  "Lắng nghe... biển đang kể chuyện",
-];
-
-const STATS_DATA = {
-  sky: { count: 1247, label: "câu chuyện đang bay trên trời" },
-  ocean: { count: 893, label: "bí mật đang chìm dưới biển" },
-};
-
-// Size of the draggable virtual canvas (3x viewport)
 const CANVAS_SCALE = 3;
 
 export default function ExplorePage() {
@@ -79,6 +54,7 @@ export default function ExplorePage() {
 function ExplorePageContent() {
   const searchParams = useSearchParams();
   const { signals, soundEnabled, toggleSound, encouragedSignalIds } = useAppState();
+  const t = useT();
 
   // Detect incoming space from URL param (e.g. /explore?from=ocean)
   const fromParam = searchParams.get("from");
@@ -93,13 +69,13 @@ function ExplorePageContent() {
   const [windowSize, setWindowSize] = useState({ w: 390, h: 844 });
 
   const isSky = space === "sky";
-  const whispers = isSky ? SKY_WHISPERS : OCEAN_WHISPERS;
-  const stats = STATS_DATA[space];
+  const whispers = isSky ? t.explore.skyWhispers : t.explore.oceanWhispers;
+  const stats = isSky
+    ? { count: 1247, label: t.explore.skyStats }
+    : { count: 893, label: t.explore.oceanStats };
 
   // =====================================================
   // SMOOTH POINTER DRAG ENGINE
-  // Uses raw pointer events for zero-lag panning.
-  // No framer-motion drag — avoids re-render jank.
   // =====================================================
   const canvasRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
@@ -107,14 +83,11 @@ function ExplorePageContent() {
   const velocity = useRef({ x: 0, y: 0 });
   const inertiaFrame = useRef<number | null>(null);
 
-  // MotionValues hold the canvas offset
   const rawX = useMotionValue(0);
   const rawY = useMotionValue(0);
-  // Smooth spring layer for parallax backgrounds
   const springX = useSpring(rawX, { stiffness: 80, damping: 22 });
   const springY = useSpring(rawY, { stiffness: 80, damping: 22 });
 
-  // Canvas boundaries: canvas is CANVAS_SCALE times the viewport
   const getBounds = useCallback(() => {
     const { w, h } = windowSize;
     const maxX = 0;
@@ -140,7 +113,6 @@ function ExplorePageContent() {
   }, [getBounds, rawX, rawY]);
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
-    // Ignore if clicking on a signal orb (pointer-events-auto children)
     if ((e.target as HTMLElement).closest("[data-signal-orb]")) return;
     isDragging.current = true;
     lastPos.current = { x: e.clientX, y: e.clientY };
@@ -166,7 +138,6 @@ function ExplorePageContent() {
     inertiaFrame.current = requestAnimationFrame(applyInertia);
   }, [applyInertia]);
 
-  // Teleport (from mini-map click)
   function handleTeleport(tx: number, ty: number) {
     const bounds = getBounds();
     const cx = clamp(tx, bounds.minX, bounds.maxX);
@@ -175,7 +146,6 @@ function ExplorePageContent() {
     animate(rawY, cy, { type: "spring", stiffness: 150, damping: 25 });
   }
 
-  // Update window size on mount / resize
   useEffect(() => {
     function update() {
       setWindowSize({ w: window.innerWidth, h: window.innerHeight });
@@ -189,16 +159,16 @@ function ExplorePageContent() {
 
   // Auto-cycle whispers
   useEffect(() => {
-    const t = setInterval(() => {
+    const interval = setInterval(() => {
       setWhisperIdx((p) => (p + 1) % whispers.length);
     }, 4000);
-    return () => clearInterval(t);
+    return () => clearInterval(interval);
   }, [whispers.length]);
 
   // Auto-dismiss intro after 3.5s
   useEffect(() => {
-    const t = setTimeout(() => setShowIntro(false), 3500);
-    return () => clearTimeout(t);
+    const time = setTimeout(() => setShowIntro(false), 3500);
+    return () => clearTimeout(time);
   }, []);
 
   // Reset whisper on space change
@@ -211,7 +181,6 @@ function ExplorePageContent() {
     [signals, isSky]
   );
 
-  // Ambient decorative particles (stars / bubbles)
   const ambientElements = useMemo(() => {
     return Array.from({ length: 80 }, (_, i) => {
       const rand = (max: number) => Math.random() * max;
@@ -235,14 +204,12 @@ function ExplorePageContent() {
 
   const Canvas = isSky ? SkyCanvas : OceanCanvas;
 
-  // Canvas pixel dimensions
   const canvasW = windowSize.w * CANVAS_SCALE;
   const canvasH = windowSize.h * CANVAS_SCALE;
 
   return (
     <Canvas mouseX={springX} mouseY={springY}>
       <div className="relative flex h-dvh w-full flex-col overflow-hidden">
-
         {/* ======================================================
             INTRO OVERLAY
             ====================================================== */}
@@ -306,7 +273,7 @@ function ExplorePageContent() {
                   className="text-xs font-semibold uppercase tracking-[0.3em] mb-3"
                   style={{ color: isSky ? "rgba(162,119,255,0.6)" : "rgba(79,209,197,0.6)" }}
                 >
-                  Bạn đang bước vào
+                  {t.explore.enteringSpace}
                 </motion.p>
                 <motion.h1
                   initial={{ opacity: 0, y: 12 }}
@@ -314,7 +281,7 @@ function ExplorePageContent() {
                   transition={{ delay: 0.55, duration: 0.5 }}
                   className="font-display text-2xl font-black text-base-text-primary mb-2"
                 >
-                  {isSky ? "Không gian Bầu Trời ✦" : "Đại Dương Bao La ◎"}
+                  {isSky ? t.explore.skyIntroHeading : t.explore.oceanIntroHeading}
                 </motion.h1>
                 <motion.p
                   initial={{ opacity: 0 }}
@@ -330,9 +297,7 @@ function ExplorePageContent() {
                   transition={{ delay: 0.85 }}
                   className="text-[10px] text-base-text-secondary"
                 >
-                  {isSky
-                    ? "Kéo để khám phá dải ngân hà câu chuyện"
-                    : "Kéo để lặn sâu vào lòng đại dương bí ẩn"}
+                  {isSky ? t.explore.skyIntroSub : t.explore.oceanIntroSub}
                 </motion.p>
 
                 {/* Progress bar */}
@@ -372,7 +337,10 @@ function ExplorePageContent() {
               boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
             }}
           >
-            <AnonymousIdentityBadge compact />
+            <div className="flex items-center gap-2">
+              <LangSwitcher />
+              <AnonymousIdentityBadge compact />
+            </div>
 
             {/* Space switcher */}
             <div className="flex items-center bg-white/[0.04] rounded-xl p-1 border border-white/6">
@@ -386,7 +354,7 @@ function ExplorePageContent() {
                 )}
                 style={isSky ? { boxShadow: "0 0 14px rgba(124,158,255,0.4)" } : {}}
               >
-                ✦ Bầu trời
+                {t.explore.skyLabel}
               </button>
               <button
                 onClick={() => setSpace("ocean")}
@@ -398,7 +366,7 @@ function ExplorePageContent() {
                 )}
                 style={!isSky ? { boxShadow: "0 0 14px rgba(79,209,197,0.4)" } : {}}
               >
-                ◎ Đại dương
+                {t.explore.oceanLabel}
               </button>
             </div>
 
@@ -449,7 +417,7 @@ function ExplorePageContent() {
         </motion.div>
 
         {/* ======================================================
-            DRAGGABLE SPACE CANVAS — pointer event driven
+            DRAGGABLE SPACE CANVAS
             ====================================================== */}
         <div
           ref={canvasRef}
@@ -460,7 +428,6 @@ function ExplorePageContent() {
           onPointerUp={onPointerUp}
           onPointerLeave={onPointerUp}
         >
-          {/* Virtual canvas — panned by rawX/rawY */}
           <motion.div
             className="absolute origin-top-left pointer-events-none"
             style={{
@@ -470,7 +437,7 @@ function ExplorePageContent() {
               y: rawY,
             }}
           >
-            {/* Subtle nebula glow */}
+            {/* Nebula glow */}
             <div
               className="absolute inset-0 opacity-30 blur-[100px] pointer-events-none"
               style={{
@@ -517,10 +484,9 @@ function ExplorePageContent() {
               )
             )}
 
-            {/* Signal Orbs — pointer-events-auto via data-signal-orb */}
+            {/* Signal Orbs */}
             <AnimatePresence>
               {visible.map((s, i) => {
-                // Convert signal's percentage position to pixel position in canvas
                 const px = (s.x / 100) * canvasW;
                 const py = (s.y / 100) * canvasH;
                 return (
@@ -597,7 +563,6 @@ function ExplorePageContent() {
 
           {/* FAB + Mini-Map row */}
           <div className="flex items-end justify-between gap-3">
-            {/* Mini-Map — bottom left */}
             <ExploreMiniMap
               dragX={rawX}
               dragY={rawY}
@@ -610,7 +575,6 @@ function ExplorePageContent() {
               onTeleport={handleTeleport}
             />
 
-            {/* Floating Action Button — bottom right area (centered) */}
             <div className="flex-1 flex justify-center pointer-events-none">
               <motion.div
                 initial={{ y: 20, scale: 0.9 }}
@@ -652,20 +616,16 @@ function ExplorePageContent() {
                   }}
                 >
                   <Plus size={16} />
-                  Chia sẻ tâm sự
+                  {t.explore.shareThoughtsBtn}
                 </Link>
               </motion.div>
             </div>
 
-            {/* Spacer to balance the map */}
             <div style={{ width: 140 }} />
           </div>
         </motion.div>
       </div>
 
-      {/* ======================================================
-          BOTTOM SHEET — Signal detail
-          ====================================================== */}
       <BottomSheet open={openSignal !== null} onClose={() => setOpenSignal(null)}>
         {openSignal && <SignalCard signal={openSignal} />}
       </BottomSheet>

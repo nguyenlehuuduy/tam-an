@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { SkyCanvas } from "@/components/canvas/SkyCanvas";
@@ -9,32 +9,20 @@ import { ReleaseGesture } from "@/components/release/ReleaseGesture";
 import { HotlineBanner } from "@/components/ui/HotlineBanner";
 import { Button } from "@/components/ui/Button";
 import { useAppState } from "@/context/AppStateContext";
-
-// =====================================================
-// THÔNG ĐIỆP TÍCH CỰC — xoay vòng mỗi 3 giây
-// Nhẹ nhàng, ấm áp, chạm vào Gen Z
-// =====================================================
-const POSITIVE_MESSAGES = [
-  "Bạn đang làm tốt hơn bạn nghĩ đấy ✦",
-  "Dù sao đi nữa, hôm nay bạn vẫn ở đây — và thế là đủ",
-  "Có những thứ không cần giải pháp, chỉ cần được nghe",
-  "Bạn không cần mạnh mẽ mọi lúc",
-  "Đêm nào rồi cũng sẽ qua đi, tin mình đi",
-  "Có ai đó ngoài kia cũng đang nghĩ về bạn lúc này",
-  "Cảm xúc của bạn là thật — và nó xứng đáng được tồn tại",
-  "Thả nó đi — bạn không cần phải giữ mãi đâu",
-  "Bầu trời vẫn ở đây chờ bạn, như luôn luôn vậy",
-  "Một bước nhỏ hôm nay, một con đường dài ngày mai",
-];
+import { useT } from "@/context/LanguageContext";
+import { LangSwitcher } from "@/components/ui/LangSwitcher";
 
 export default function RitualPage() {
   const router = useRouter();
   const { draft, releaseDraft } = useAppState();
+  const t = useT();
+
   const [phase, setPhase] = useState<"hold" | "released">("hold");
   const [highRisk, setHighRisk] = useState(false);
   const [msgIdx, setMsgIdx] = useState(0);
 
   const [savedType] = useState(draft.type);
+  const positiveMessages = t.ritual.positiveMessages;
 
   // Redirect nếu không có draft
   useEffect(() => {
@@ -45,11 +33,11 @@ export default function RitualPage() {
 
   // Xoay thông điệp tích cực mỗi 3 giây
   useEffect(() => {
-    const t = setInterval(() => {
-      setMsgIdx((p) => (p + 1) % POSITIVE_MESSAGES.length);
+    const interval = setInterval(() => {
+      setMsgIdx((p) => (p + 1) % positiveMessages.length);
     }, 3000);
-    return () => clearInterval(t);
-  }, []);
+    return () => clearInterval(interval);
+  }, [positiveMessages.length]);
 
   if (!savedType) return null;
 
@@ -71,6 +59,10 @@ export default function RitualPage() {
   return (
     <Canvas>
       <div className="relative flex min-h-dvh w-full flex-col items-center justify-between px-5 py-6 md:px-8">
+        {/* Floating Language Switcher */}
+        <div className="absolute right-4 top-4 z-20 md:right-6 md:top-5">
+          <LangSwitcher />
+        </div>
 
         {/* ── Header — rotating positive message ── */}
         <motion.div
@@ -89,7 +81,7 @@ export default function RitualPage() {
                 transition={{ duration: 0.35 }}
                 className="text-xs text-base-text-secondary/70 leading-relaxed"
               >
-                {POSITIVE_MESSAGES[msgIdx]}
+                {positiveMessages[msgIdx]}
               </motion.p>
             </AnimatePresence>
           </div>
@@ -115,12 +107,10 @@ export default function RitualPage() {
                   className="text-center"
                 >
                   <p className="text-xs font-semibold uppercase tracking-[0.25em] text-base-text-secondary/40 mb-2">
-                    {isStar ? "bầu trời đang chờ" : "đại dương đang lắng nghe"}
+                    {isStar ? t.ritual.skyWaiting : t.ritual.oceanWaiting}
                   </p>
                   <p className="text-sm text-base-text-secondary/60">
-                    {isStar
-                      ? "Vuốt ngôi sao lên — để nó bay đi"
-                      : "Vuốt bong bóng xuống — để nó chìm sâu"}
+                    {isStar ? t.ritual.swipeUpStar : t.ritual.swipeDownBubble}
                   </p>
                 </motion.div>
 
@@ -133,7 +123,7 @@ export default function RitualPage() {
                   transition={{ duration: 2, repeat: Infinity }}
                   className="text-[11px] text-base-text-secondary/40"
                 >
-                  {isStar ? "↑ vuốt lên" : "↓ vuốt xuống"}
+                  {isStar ? t.ritual.swipeUpHint : t.ritual.swipeDownHint}
                 </motion.p>
               </motion.div>
             ) : (
@@ -175,7 +165,7 @@ export default function RitualPage() {
                   transition={{ delay: 0.3 }}
                   className="font-display text-xl font-bold text-base-text-primary mb-2"
                 >
-                  {isStar ? "Ngôi sao đã bay lên trời rồi" : "Bong bóng đã chìm xuống biển rồi"}
+                  {isStar ? t.ritual.starReleased : t.ritual.bubbleReleased}
                 </motion.h2>
 
                 <motion.p
@@ -184,10 +174,7 @@ export default function RitualPage() {
                   transition={{ delay: 0.45 }}
                   className="text-sm text-base-text-secondary/60 leading-relaxed mb-2"
                 >
-                  Câu chuyện của bạn giờ đã thuộc về{" "}
-                  {isStar ? "bầu trời" : "đại dương"}.
-                  <br />
-                  Cảm ơn bạn đã dũng cảm chia sẻ 💛
+                  {isStar ? t.ritual.starReleasedSub : t.ritual.bubbleReleasedSub}
                 </motion.p>
 
                 {/* Auto-redirect indicator */}
@@ -214,7 +201,7 @@ export default function RitualPage() {
                       />
                     </motion.div>
                     <p className="text-[10px] text-base-text-secondary/40">
-                      Đang đưa bạn đến không gian...
+                      {t.ritual.redirecting}
                     </p>
                   </motion.div>
                 )}
@@ -233,7 +220,7 @@ export default function RitualPage() {
                       onClick={() => router.push(`/explore?from=${isStar ? "sky" : "ocean"}`)}
                       className="mt-5 w-full font-bold"
                     >
-                      Khám phá không gian →
+                      {t.ritual.exploreBtn}
                     </Button>
                   </motion.div>
                 )}
@@ -250,7 +237,7 @@ export default function RitualPage() {
           className="z-10 text-center"
         >
           <p className="text-[10px] text-base-text-secondary">
-            🔒 Ẩn danh · An toàn · Riêng tư
+            {t.common.privacyFooter}
           </p>
         </motion.footer>
       </div>

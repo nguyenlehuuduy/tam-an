@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/context/LanguageContext";
 
 /**
  * Root page — redirect logic:
@@ -12,6 +13,7 @@ import { useAuth } from "@/context/AuthContext";
 export default function RootPage() {
   const router = useRouter();
   const { isAuthenticated, hydrated } = useAuth();
+  const t = useT();
 
   useEffect(() => {
     if (!hydrated) return;
@@ -28,7 +30,7 @@ export default function RootPage() {
       <div className="flex flex-col items-center gap-3">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-purple-400/30 border-t-purple-400" />
         <p className="text-xs text-base-text-secondary/40 animate-pulse">
-          Đang mở không gian...
+          {t.common.loading}
         </p>
       </div>
     </div>

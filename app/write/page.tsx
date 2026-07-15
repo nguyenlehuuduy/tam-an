@@ -6,49 +6,41 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Star, Waves, ChevronLeft, Sparkles, Feather, Heart } from "lucide-react";
 import { useAppState } from "@/context/AppStateContext";
 import { AnonymousIdentityBadge } from "@/components/onboarding/AnonymousIdentityBadge";
+import { useT } from "@/context/LanguageContext";
+import { LangSwitcher } from "@/components/ui/LangSwitcher";
 import clsx from "clsx";
 
 const CHAR_LIMIT = 300;
 
-// =====================================================
-// GỢI Ý NHẸ NHÀNG — xoay vòng, chạm vào cảm xúc
-// Thay vì "Điều gì đang khiến lòng bạn nặng trĩu..."
-// =====================================================
-const PROMPTS = [
-  "Hôm nay mình muốn kể rằng...",
-  "Có một điều mình chưa nói với ai...",
-  "Lúc này mình đang cảm thấy...",
-  "Nếu được quay lại hôm qua, mình sẽ...",
-  "Điều nhỏ nhưng ám ảnh mình gần đây là...",
-  "Mình ước có ai đó hiểu rằng...",
-];
-
-/** Gợi ý thả — nhẹ nhàng, không áp lực */
-const DESTINATION_HINTS = {
-  star: {
-    title: "Thả lên bầu trời",
-    subtitle: "Để ai đó ngước lên và thấy câu chuyện của bạn",
-    emoji: "✦",
-    color: "#F5D67D",
-    glowColor: "rgba(245,214,125,0.25)",
-    bgGrad: "linear-gradient(135deg, rgba(58,46,92,0.4), rgba(124,158,255,0.15))",
-  },
-  bubble: {
-    title: "Thả xuống đại dương",
-    subtitle: "Để nó trôi đi nhẹ nhàng, như một lời thì thầm",
-    emoji: "◎",
-    color: "#4FD1C5",
-    glowColor: "rgba(79,209,197,0.25)",
-    bgGrad: "linear-gradient(135deg, rgba(7,32,52,0.5), rgba(79,209,197,0.12))",
-  },
-};
-
 export default function WritePage() {
   const router = useRouter();
   const { draft, setDraftContent, setDraftType, mood } = useAppState();
+  const t = useT();
+
   const [promptIdx, setPromptIdx] = useState(0);
   const [showPromptHint, setShowPromptHint] = useState(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const prompts = t.write.prompts;
+
+  const destinationHints = {
+    star: {
+      title: t.write.starTitle,
+      subtitle: t.write.starSub,
+      emoji: "✦",
+      color: "#F5D67D",
+      glowColor: "rgba(245,214,125,0.25)",
+      bgGrad: "linear-gradient(135deg, rgba(58,46,92,0.4), rgba(124,158,255,0.15))",
+    },
+    bubble: {
+      title: t.write.bubbleTitle,
+      subtitle: t.write.bubbleSub,
+      emoji: "◎",
+      color: "#4FD1C5",
+      glowColor: "rgba(79,209,197,0.25)",
+      bgGrad: "linear-gradient(135deg, rgba(7,32,52,0.5), rgba(79,209,197,0.12))",
+    },
+  };
 
   const remaining = CHAR_LIMIT - draft.content.length;
   const isStar = draft.type === "star";
@@ -59,16 +51,16 @@ export default function WritePage() {
   // Xoay gợi ý mỗi 4s (chỉ khi textarea trống)
   useEffect(() => {
     if (hasContent) return;
-    const t = setInterval(() => {
-      setPromptIdx((p) => (p + 1) % PROMPTS.length);
+    const interval = setInterval(() => {
+      setPromptIdx((p) => (p + 1) % prompts.length);
     }, 4000);
-    return () => clearInterval(t);
-  }, [hasContent]);
+    return () => clearInterval(interval);
+  }, [hasContent, prompts.length]);
 
   // Tự focus textarea sau animation
   useEffect(() => {
-    const t = setTimeout(() => textareaRef.current?.focus(), 600);
-    return () => clearTimeout(t);
+    const time = setTimeout(() => textareaRef.current?.focus(), 600);
+    return () => clearTimeout(time);
   }, []);
 
   // Ẩn prompt hint khi bắt đầu gõ
@@ -79,9 +71,9 @@ export default function WritePage() {
 
   // Mood label nhẹ nhàng
   const moodHint = mood !== null && mood <= 3
-    ? "Mình hiểu hôm nay không dễ dàng lắm..."
+    ? t.write.moodHintHard
     : mood !== null && mood >= 7
-    ? "Hôm nay có vẻ tích cực nhỉ ✨"
+    ? t.write.moodHintEasy
     : null;
 
   return (
@@ -130,7 +122,6 @@ export default function WritePage() {
 
       {/* ── Main content ── */}
       <div className="relative z-10 mx-auto flex min-h-dvh max-w-lg flex-col px-5 pb-8 pt-4 md:px-6">
-
         {/* Header */}
         <motion.header
           initial={{ opacity: 0, y: -10 }}
@@ -144,9 +135,12 @@ export default function WritePage() {
             style={{ minHeight: 0 }}
           >
             <ChevronLeft size={16} />
-            <span className="text-xs">Quay lại</span>
+            <span className="text-xs">{t.common.back}</span>
           </button>
-          <AnonymousIdentityBadge compact />
+          <div className="flex items-center gap-2">
+            <LangSwitcher />
+            <AnonymousIdentityBadge compact />
+          </div>
         </motion.header>
 
         {/* ── Content area ── */}
@@ -162,7 +156,7 @@ export default function WritePage() {
               <div className="h-1.5 w-8 rounded-full bg-sky-aurora/50" />
               <div className="h-1.5 w-8 rounded-full bg-sky-aurora" />
               <p className="ml-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-base-text-secondary/50">
-                Bước 2 / 2
+                {t.write.step2of2}
               </p>
             </div>
 
@@ -190,11 +184,11 @@ export default function WritePage() {
             <div className="flex items-center gap-2.5 mb-2">
               <Feather size={18} className="text-purple-300/70" />
               <h1 className="font-display text-xl font-bold text-base-text-primary">
-                Viết ra điều đang ở trong lòng
+                {t.write.writeHeading}
               </h1>
             </div>
             <p className="text-[13px] text-base-text-secondary/60 leading-relaxed pl-[30px]">
-              Không cần phải hay — chỉ cần thật. Ở đây không ai phán xét đâu.
+              {t.write.writeSub}
             </p>
           </motion.div>
 
@@ -217,7 +211,7 @@ export default function WritePage() {
                   className="absolute top-4 left-4 right-12 pointer-events-none z-0"
                 >
                   <p className="text-[15px] text-base-text-secondary/30 leading-relaxed italic">
-                    {PROMPTS[promptIdx]}
+                    {prompts[promptIdx]}
                   </p>
                 </motion.div>
               )}
@@ -271,7 +265,7 @@ export default function WritePage() {
                     : "text-base-text-secondary/30"
                 )}
               >
-                {remaining}
+                {remaining} {t.write.remainingChars}
               </span>
             </div>
           </motion.div>
@@ -285,12 +279,12 @@ export default function WritePage() {
           >
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-base-text-secondary/50 flex items-center gap-1.5">
               <Sparkles size={11} className="text-purple-300/50" />
-              Bạn muốn thả nó về đâu?
+              {t.write.destinationTitle}
             </p>
 
             <div className="grid grid-cols-2 gap-3">
               {(["star", "bubble"] as const).map((type) => {
-                const hint = DESTINATION_HINTS[type];
+                const hint = destinationHints[type];
                 const isSelected = draft.type === type;
                 const Icon = type === "star" ? Star : Waves;
 
@@ -399,7 +393,7 @@ export default function WritePage() {
                   >
                     <span className="absolute inset-0 shimmer-bg pointer-events-none" style={{ borderRadius: "inherit" }} />
                     <span className="relative flex items-center justify-center gap-2">
-                      {isStar ? "✦ Thả ngôi sao của bạn lên trời" : "◎ Thả bong bóng xuống biển"}
+                      {isStar ? t.write.readyStarBtn : t.write.readyBubbleBtn}
                       <motion.span
                         animate={{ x: [0, 3, 0] }}
                         transition={{ duration: 1.2, repeat: Infinity }}
@@ -418,10 +412,10 @@ export default function WritePage() {
                   className="rounded-full border border-dashed border-white/10 py-4 text-center text-sm text-base-text-secondary/35"
                 >
                   {!hasContent && !draft.type
-                    ? "Viết gì đó rồi chọn nơi thả nhé..."
+                    ? t.write.waitingContentAndType
                     : !hasContent
-                    ? "Hãy viết ra điều bạn đang nghĩ..."
-                    : "Chọn bầu trời hoặc đại dương để tiếp tục"}
+                    ? t.write.waitingContentOnly
+                    : t.write.waitingTypeOnly}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -434,7 +428,7 @@ export default function WritePage() {
             transition={{ delay: 0.7 }}
             className="mt-5 text-center text-[10px] text-base-text-secondary"
           >
-            🔒 Ẩn danh hoàn toàn · Không ai biết bạn là ai
+            {t.write.anonymousFooter}
           </motion.p>
         </motion.div>
       </div>
