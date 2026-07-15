@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Signal, warmthLabel } from "@/lib/mockSignals";
+import { Signal } from "@/lib/mockSignals";
 import { ReactionPicker } from "./ReactionPicker";
 import { useAppState } from "@/context/AppStateContext";
+import { useT } from "@/context/LanguageContext";
 import { playSendReaction } from "@/lib/sound";
 import { Sparkles, Star, Waves, Send } from "lucide-react";
 
@@ -14,43 +15,37 @@ interface SignalCardProps {
 
 const MAX_MSG = 120;
 
-const SKY_SUGGESTIONS = [
-  "Tớ luôn ở đây lắng nghe cậu. ✨",
-  "Cậu đã làm rất tốt rồi, đừng quá gồng mình nhé. 🫂",
-  "Mọi giông bão rồi sẽ qua, ngày mai tớ vẫn ở đây. 🌙",
-  "Cảm ơn cậu đã dũng cảm chia sẻ điều này. ✦",
-  "Chậm lại một chút cũng không sao đâu cậu. ☕",
-  "Cầu mong tối nay cậu sẽ có một giấc ngủ bình yên. 💤",
-  "Bạn xứng đáng được trân trọng và lắng nghe. ❤️",
-  "Những mệt mỏi này rồi sẽ hóa thành sức mạnh thôi. ⭐",
-];
-
-const OCEAN_SUGGESTIONS = [
-  "Hãy cứ để mọi muộn phiền trôi đi theo dòng nước. 🌊",
-  "Hôm nay vất vả rồi, nghỉ tay uống một cốc nước ấm nhé. 🍵",
-  "Biển cả giữ bí mật cho cậu, cậu không cô đơn đâu. 🫂",
-  "Mọi chuyện rồi sẽ nhẹ nhõm hơn vào ngày mai thôi. 🫧",
-  "Hãy dịu dàng với chính mình hơn một chút cậu nhé. 💙",
-  "Tớ tin cậu sẽ vượt qua được bến bờ này. ⛵",
-  "Không sao đâu, khóc một chút rồi mai ta lại mỉm cười. 🐬",
-  "Lời tâm sự của cậu đã được đại dương ôm trọn rồi. 🐚",
-];
-
 export function SignalCard({ signal }: SignalCardProps) {
   const { reactedSignalIds, sendReaction, soundEnabled } = useAppState();
+  const t = useT();
+
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [phase, setPhase] = useState<"pick" | "write" | "done">("pick");
+  
   const alreadyReacted = reactedSignalIds.includes(signal.id);
   const isStar = signal.type === "star";
 
   const accentColor = isStar ? "#F5D67D" : "#4FD1C5";
   const accentGlow = isStar ? "rgba(245, 214, 125, 0.25)" : "rgba(79, 209, 197, 0.25)";
 
+  const suggestions = isStar ? t.signalCard.supportSuggestionsSky : t.signalCard.supportSuggestionsOcean;
+  const msgPlaceholder = isStar ? t.signalCard.starPlaceholder : t.signalCard.bubblePlaceholder;
+
+  const warmthText = useMemo(() => {
+    switch (signal.warmth) {
+      case "many":
+        return t.signalCard.warmthMany;
+      case "some":
+        return t.signalCard.warmthSome;
+      default:
+        return t.signalCard.warmthFew;
+    }
+  }, [signal.warmth, t]);
+
   function handlePickReaction(key: string) {
     if (alreadyReacted) return;
     setSelectedKey(key);
-    // Sau khi chọn preset → chuyển sang bước viết lời động viên
     setPhase("write");
   }
 
@@ -68,11 +63,6 @@ export function SignalCard({ signal }: SignalCardProps) {
     if (soundEnabled) playSendReaction();
     setPhase("done");
   }
-
-  // Placeholder cho textarea theo loại signal
-  const msgPlaceholder = isStar
-    ? "Ví dụ: \"Mình cũng từng thế này. Bạn không một mình đâu...\""
-    : "Ví dụ: \"Hãy cứ để nó trôi đi — ngày mai sẽ nhẹ hơn hôm nay\"";
 
   return (
     <div className="signal-envelope-open">
@@ -109,10 +99,10 @@ export function SignalCard({ signal }: SignalCardProps) {
           transition={{ delay: 0.15 }}
         >
           <p className="text-xs font-bold uppercase tracking-wider" style={{ color: accentColor }}>
-            {isStar ? "✦ Nhặt được từ bầu trời" : "◎ Nổi lên từ đại dương"}
+            {isStar ? t.signalCard.pickedFromSky : t.signalCard.pickedFromOcean}
           </p>
-          <p className="text-[11px] text-base-text-secondary mt-0.5">
-            {signal.createdAgo} · {warmthLabel(signal.warmth)}
+          <p className="text-[11px] text-base-text-secondary mt-0.5" suppressHydrationWarning>
+            {signal.createdAgo} · {warmthText}
           </p>
         </motion.div>
       </div>
@@ -123,7 +113,7 @@ export function SignalCard({ signal }: SignalCardProps) {
         style={{ background: `linear-gradient(90deg, ${accentColor}55, transparent)` }}
       />
 
-      {/* === CONTENT — POEM LIKE === */}
+      {/* === CONTENT === */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -155,9 +145,7 @@ export function SignalCard({ signal }: SignalCardProps) {
         className="mt-8"
       >
         <AnimatePresence mode="wait">
-
-          {/* Phase: done */}
-          {(phase === "done" || alreadyReacted) ? (
+          {phase === "done" || alreadyReacted ? (
             <motion.div
               key="done"
               initial={{ opacity: 0, scale: 0.9 }}
@@ -181,27 +169,27 @@ export function SignalCard({ signal }: SignalCardProps) {
               </motion.div>
               <div>
                 <p className="text-sm font-bold text-base-text-primary">
-                  {message.trim() ? "Lời động viên của bạn đã bay đi ✨" : "Tia sáng của bạn đã chạm tới họ ✨"}
+                  {message.trim() ? t.signalCard.encouragementSent : t.signalCard.sparkSent}
                 </p>
                 <p className="mt-1 text-xs text-base-text-secondary leading-relaxed">
                   {message.trim()
-                    ? `Năng lượng ấm áp của bạn đã truyền đến họ. ${isStar ? "Ngôi sao này" : "Bong bóng này"} giờ đây đã sáng rực rỡ và to lớn hơn rất nhiều!`
-                    : `Dù không nói thành lời, sự quan tâm của bạn đã làm ${isStar ? "ngôi sao này" : "bong bóng này"} bừng sáng lấp lánh hơn hẳn!`}
+                    ? isStar
+                      ? t.signalCard.encouragementSentSub
+                      : t.signalCard.encouragementSentSubOcean
+                    : isStar
+                    ? t.signalCard.sparkSentSub
+                    : t.signalCard.sparkSentSubOcean}
                 </p>
               </div>
             </motion.div>
-
           ) : phase === "pick" ? (
-            /* Phase: chọn preset */
             <motion.div key="pick" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <p className="mb-3 text-xs font-bold uppercase tracking-wider text-base-text-secondary">
-                Gửi một tia sáng ấm áp:
+                {t.signalCard.sendWarmSpark}
               </p>
               <ReactionPicker selectedKey={selectedKey} onSelect={handlePickReaction} />
             </motion.div>
-
           ) : (
-            /* Phase: viết lời động viên */
             <motion.div
               key="write"
               initial={{ opacity: 0, y: 10 }}
@@ -220,7 +208,7 @@ export function SignalCard({ signal }: SignalCardProps) {
               >
                 <Sparkles size={13} className="text-warm shrink-0" />
                 <span className="text-base-text-secondary text-[11px]">
-                  Đã nhận diện cảm xúc — đính kèm thêm lời nhắn gửi để làm họ vui lên nhé?
+                  {t.signalCard.moodDetected}
                 </span>
               </div>
 
@@ -256,10 +244,10 @@ export function SignalCard({ signal }: SignalCardProps) {
               {/* Suggestions Container */}
               <div className="flex flex-col gap-2">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-base-text-secondary/55 flex items-center gap-1.5 select-none">
-                  <span>✨ Lời vỗ về tâm hồn gợi ý:</span>
+                  <span>{t.signalCard.supportSuggestionsTitle}</span>
                 </p>
                 <div className="flex flex-wrap gap-1.5 max-h-[110px] overflow-y-auto pr-1">
-                  {(isStar ? SKY_SUGGESTIONS : OCEAN_SUGGESTIONS).map((s, idx) => (
+                  {suggestions.map((s, idx) => (
                     <motion.button
                       key={idx}
                       whileHover={{ scale: 1.02 }}
@@ -284,7 +272,7 @@ export function SignalCard({ signal }: SignalCardProps) {
                   className="orb-btn flex-1 rounded-full border border-base-divider py-2.5 text-xs text-base-text-secondary hover:bg-white/5 hover:text-base-text-primary transition-colors"
                   style={{ minHeight: 0 }}
                 >
-                  Bỏ qua
+                  {t.signalCard.skipBtn}
                 </button>
                 <motion.button
                   whileTap={{ scale: 0.95 }}
@@ -299,7 +287,7 @@ export function SignalCard({ signal }: SignalCardProps) {
                   }}
                 >
                   <Send size={14} />
-                  {message.trim() ? "Gửi lời động viên ✦" : "Gửi tia sáng"}
+                  {message.trim() ? t.signalCard.sendEncouragement : t.signalCard.sendSparkOnly}
                 </motion.button>
               </div>
             </motion.div>

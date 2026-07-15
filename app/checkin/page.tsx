@@ -1,44 +1,14 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { SkyCanvas } from "@/components/canvas/SkyCanvas";
 import { MoodSlider } from "@/components/onboarding/MoodSlider";
 import { AnonymousIdentityBadge } from "@/components/onboarding/AnonymousIdentityBadge";
 import { useAppState } from "@/context/AppStateContext";
-
-// =====================================================
-// CÁC MẢNH TÂM SỰ ẨN DANH — trôi nổi blur trong nền
-// Đây là những câu chuyện THẬT mà Gen Z đang giữ trong lòng
-// =====================================================
-const STORY_GLIMPSES = [
-  {
-    id: 0,
-    text: "Mình mệt vì cứ phải tỏ ra ổn trước mặt mọi người...",
-    x: "6%", y: "18%", rotate: -4, delay: 0.6,
-  },
-  {
-    id: 1,
-    text: "Tại sao mọi người trông đều ổn hơn mình vậy?",
-    x: "70%", y: "10%", rotate: 3, delay: 1.1,
-  },
-  {
-    id: 2,
-    text: "Đêm qua nằm nghĩ mãi... không ngủ được.",
-    x: "65%", y: "74%", rotate: -2, delay: 1.8,
-  },
-  {
-    id: 3,
-    text: "Có những thứ mình chỉ dám viết ra chứ không dám nói",
-    x: "3%", y: "66%", rotate: 5, delay: 0.9,
-  },
-  {
-    id: 4,
-    text: "Hôm nay mình đã làm điều mình sợ nhất từ trước đến giờ",
-    x: "76%", y: "46%", rotate: -5, delay: 2.2,
-  },
-];
+import { useT, useLanguage } from "@/context/LanguageContext";
+import { LangSwitcher } from "@/components/ui/LangSwitcher";
 
 const LIVE_COUNT_BASE = 247;
 type Phase = "intro" | "mood";
@@ -46,9 +16,23 @@ type Phase = "intro" | "mood";
 export default function CheckinPage() {
   const router = useRouter();
   const { mood, setMood } = useAppState();
+  const t = useT();
+  const { lang } = useLanguage();
+
   const [liveCount, setLiveCount] = useState(LIVE_COUNT_BASE);
   const [phase, setPhase] = useState<Phase>("intro");
   const [mounted, setMounted] = useState(false);
+
+  // STORY_GLIMPSES dynamically translated
+  const storyGlimpses = useMemo(() => {
+    return [
+      { id: 0, text: t.checkin.storyGlimpses[0], x: "6%", y: "18%", rotate: -4, delay: 0.6 },
+      { id: 1, text: t.checkin.storyGlimpses[1], x: "70%", y: "10%", rotate: 3, delay: 1.1 },
+      { id: 2, text: t.checkin.storyGlimpses[2], x: "65%", y: "74%", rotate: -2, delay: 1.8 },
+      { id: 3, text: t.checkin.storyGlimpses[3], x: "3%", y: "66%", rotate: 5, delay: 0.9 },
+      { id: 4, text: t.checkin.storyGlimpses[4], x: "76%", y: "46%", rotate: -5, delay: 2.2 },
+    ];
+  }, [t]);
 
   // Mouse parallax cho hero
   const mouseX = useMotionValue(0);
@@ -87,13 +71,13 @@ export default function CheckinPage() {
         className="relative flex min-h-dvh w-full flex-col overflow-hidden"
         onMouseMove={handleMouseMove}
       >
-        {/* Identity Badge — luôn hiển thị */}
-        <div className="absolute right-4 top-4 z-30 md:right-6 md:top-5">
+        {/* Header Badges */}
+        <div className="absolute right-4 top-4 z-30 md:right-6 md:top-5 flex items-center gap-2">
+          <LangSwitcher />
           <AnonymousIdentityBadge compact />
         </div>
 
         <AnimatePresence mode="wait">
-
           {/* ============================================
               PHASE 1 — INTRO HERO
               "Không gian nơi bạn không cần phải ổn"
@@ -108,7 +92,7 @@ export default function CheckinPage() {
               className="flex min-h-dvh w-full flex-col items-center justify-center px-5"
             >
               {/* ── Floating Story Glimpses (desktop only) ── */}
-              {mounted && STORY_GLIMPSES.map((s) => (
+              {mounted && storyGlimpses.map((s) => (
                 <motion.div
                   key={s.id}
                   initial={{ opacity: 0, y: 16 }}
@@ -163,7 +147,7 @@ export default function CheckinPage() {
                         {mounted ? liveCount : LIVE_COUNT_BASE}
                       </motion.span>
                     </AnimatePresence>
-                    {" "}linh hồn đang trôi nổi trong không gian này
+                    {" "}{t.checkin.linhHonCount}
                   </span>
                 </motion.div>
 
@@ -175,7 +159,7 @@ export default function CheckinPage() {
                     transition={{ delay: 0.3, duration: 0.5 }}
                     className="mb-2 text-xs font-semibold uppercase tracking-[0.3em] text-base-text-secondary/60"
                   >
-                    một không gian để
+                    {t.checkin.introLine1}
                   </motion.p>
 
                   <motion.h1
@@ -185,7 +169,7 @@ export default function CheckinPage() {
                     className="font-display font-black leading-[1.08] tracking-tight text-base-text-primary"
                     style={{ fontSize: "clamp(2.4rem, 6vw, 3.8rem)" }}
                   >
-                    nói ra điều
+                    {t.checkin.introLine2}
                   </motion.h1>
 
                   <motion.h1
@@ -195,7 +179,7 @@ export default function CheckinPage() {
                     className="font-display font-black leading-[1.08] tracking-tight shimmer-text"
                     style={{ fontSize: "clamp(2.4rem, 6vw, 3.8rem)" }}
                   >
-                    chưa nói được
+                    {t.checkin.introLine3}
                   </motion.h1>
 
                   <motion.h1
@@ -205,7 +189,7 @@ export default function CheckinPage() {
                     className="font-display font-black leading-[1.08] tracking-tight text-base-text-primary"
                     style={{ fontSize: "clamp(2.4rem, 6vw, 3.8rem)" }}
                   >
-                    với ai
+                    {t.checkin.introLine4}
                   </motion.h1>
                 </div>
 
@@ -216,10 +200,7 @@ export default function CheckinPage() {
                   transition={{ delay: 0.88, duration: 0.6 }}
                   className="mb-10 max-w-[340px] text-[15px] leading-[1.75] text-base-text-secondary"
                 >
-                  Không cần phải ổn. Không cần giải thích.{" "}
-                  <br className="hidden md:block" />
-                  <span className="font-medium text-sky-aurora/80">Cứ thật lòng</span>{" "}
-                  — vũ trụ sẽ lắng nghe không phán xét.
+                  {t.checkin.introSub}
                 </motion.p>
 
                 {/* ── CTA BUTTON ── */}
@@ -254,7 +235,7 @@ export default function CheckinPage() {
                       boxShadow: "0 0 40px rgba(124,158,255,0.5), 0 8px 32px rgba(0,0,0,0.55)",
                     }}
                   >
-                    <span>Tôi có điều muốn nói</span>
+                    <span>{t.checkin.introCta}</span>
                     <motion.span
                       animate={{ x: [0, 4, 0] }}
                       transition={{ duration: 1.5, repeat: Infinity }}
@@ -271,7 +252,7 @@ export default function CheckinPage() {
                   transition={{ delay: 1.5 }}
                   className="mt-8 text-xs text-base-text-secondary"
                 >
-                  🔒 Hoàn toàn ẩn danh · Không tài khoản · Không lưu vết
+                  {t.common.anonymityFooter}
                 </motion.p>
               </motion.div>
             </motion.div>
@@ -291,7 +272,6 @@ export default function CheckinPage() {
               className="flex min-h-dvh w-full flex-col items-center justify-center px-5"
             >
               <div className="w-full max-w-sm">
-
                 {/* Step indicator */}
                 <motion.div
                   initial={{ opacity: 0, y: -8 }}
@@ -305,15 +285,25 @@ export default function CheckinPage() {
                     <div className="h-1.5 w-8 rounded-full bg-white/15" />
                   </div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-base-text-secondary/60">
-                    Bước 1 / 2
+                    {t.checkin.step1of2}
                   </p>
                   <h2 className="font-display text-2xl font-bold leading-tight text-base-text-primary">
-                    Hôm nay bạn đang{" "}
-                    <span className="shimmer-text">cảm thấy</span>{" "}
-                    thế nào?
+                    {lang === "vi" ? (
+                      <>
+                        Hôm nay bạn đang{" "}
+                        <span className="shimmer-text">cảm thấy</span>{" "}
+                        thế nào?
+                      </>
+                    ) : (
+                      <>
+                        How are you{" "}
+                        <span className="shimmer-text">feeling</span>{" "}
+                        today?
+                      </>
+                    )}
                   </h2>
                   <p className="text-sm text-base-text-secondary/70">
-                    Không có câu trả lời đúng hay sai.
+                    {t.checkin.moodSub}
                   </p>
                 </motion.div>
 
@@ -327,7 +317,7 @@ export default function CheckinPage() {
                   <MoodSlider value={mood} onChange={setMood} />
                 </motion.div>
 
-                {/* Continue button — chỉ hiện khi đã chọn mood */}
+                {/* Continue button */}
                 <AnimatePresence>
                   {canContinue && (
                     <motion.div
@@ -360,7 +350,7 @@ export default function CheckinPage() {
                           style={{ borderRadius: "inherit" }}
                         />
                         <span className="relative flex items-center justify-center gap-2">
-                          ✨ Tiếp tục → Chia sẻ nỗi lòng
+                          {t.checkin.moodBtn}
                         </span>
                       </motion.button>
                     </motion.div>
@@ -375,7 +365,7 @@ export default function CheckinPage() {
                     transition={{ delay: 0.4 }}
                     className="mt-6 rounded-full border border-dashed border-white/10 py-4 text-center text-sm text-base-text-secondary/40"
                   >
-                    Chạm vào cảm xúc để tiếp tục...
+                    {t.checkin.moodPlaceholder}
                   </motion.div>
                 )}
 
@@ -388,12 +378,11 @@ export default function CheckinPage() {
                   className="orb-btn mt-5 w-full text-center text-xs text-base-text-secondary/50 hover:text-base-text-secondary transition-colors py-2"
                   style={{ minHeight: 0 }}
                 >
-                  ← Quay lại
+                  ← {t.common.back}
                 </motion.button>
               </div>
             </motion.div>
           )}
-
         </AnimatePresence>
       </div>
     </SkyCanvas>

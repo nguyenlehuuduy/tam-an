@@ -15,14 +15,12 @@ import {
   Music,
   Flame,
   X,
-  Check,
 } from "lucide-react";
 import { IdentityIcon, IdentityVibe } from "@/lib/identity";
 import { useAppState } from "@/context/AppStateContext";
-import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { useLanguage } from "@/context/LanguageContext";
 import clsx from "clsx";
 
 const ICON_MAP: Record<IdentityIcon, LucideIcon> = {
@@ -45,9 +43,6 @@ interface AnonymousIdentityBadgeProps {
   compact?: boolean;
 }
 
-// =====================================================
-// VIBE METADATA — full description of what each changes
-// =====================================================
 interface VibeMeta {
   label: string;
   emoji: string;
@@ -58,85 +53,159 @@ interface VibeMeta {
   dotClass: string;
   glowClass: string;
   changes: string[];
-  writeHint: string; // Gợi ý viết cho vibe này
 }
 
-const VIBE_META: Record<IdentityVibe, VibeMeta> = {
+const VIBE_BASE_META: Record<IdentityVibe, Omit<VibeMeta, "label" | "tagline" | "changes">> = {
   cozy: {
-    label: "Ấm Áp",
     emoji: "🕯️",
-    tagline: "Như góc cafe khuya, yên tĩnh và dịu dàng",
     icon: Flame,
     accentColor: "#E8A47A",
     bgPreview: "linear-gradient(135deg, #3B1F0E 0%, rgba(232,164,122,0.3) 100%)",
     dotClass: "bg-vibe-cozy",
     glowClass: "glow-cozy",
-    changes: [
-      "Accent cam vàng ấm trong toàn app",
-      "Bầu trời nhuốm màu hoàng hôn nhẹ",
-      "Badge sáng tông cam ấm áp",
-    ],
-    writeHint: "Hôm nay có điều gì nhỏ thôi nhưng khiến bạn cảm thấy...",
   },
   dreamy: {
-    label: "Mơ Mộng",
     emoji: "🌙",
-    tagline: "Như đêm trăng tím, ngân hà xa và những giấc mơ",
     icon: Moon,
     accentColor: "#C084FC",
     bgPreview: "linear-gradient(135deg, #1A0533 0%, rgba(192,132,252,0.35) 100%)",
     dotClass: "bg-vibe-dreamy",
     glowClass: "glow-dreamy",
-    changes: [
-      "Accent tím lavender thơ mộng",
-      "Bầu trời đậm tím như giải ngân hà",
-      "Badge phát sáng tím mộng mơ",
-    ],
-    writeHint: "Đôi khi trong những khoảnh khắc yên tĩnh nhất, bạn nghĩ về...",
   },
   cyber: {
-    label: "Công Nghệ",
     emoji: "⚡",
-    tagline: "Neon cyan sắc bén, digital và đậm chất tương lai",
     icon: Zap,
     accentColor: "#22D3EE",
     bgPreview: "linear-gradient(135deg, #001A20 0%, rgba(34,211,238,0.35) 100%)",
     dotClass: "bg-vibe-cyber",
     glowClass: "glow-cyber",
-    changes: [
-      "Accent neon cyan lạnh và sharp",
-      "Bầu trời tông xanh digital",
-      "Badge phát sáng xanh neon",
-    ],
-    writeHint: "Có một điều mình cần nói thẳng ra, không vòng vo...",
   },
   lofi: {
-    label: "Hoài Niệm",
     emoji: "🎵",
-    tagline: "Amber hoài cổ, như cassette cũ và những chiều mưa",
     icon: Music,
     accentColor: "#FBBF24",
     bgPreview: "linear-gradient(135deg, #1A1000 0%, rgba(251,191,36,0.35) 100%)",
     dotClass: "bg-vibe-lofi",
     glowClass: "glow-lofi",
-    changes: [
-      "Accent vàng amber hoài niệm",
-      "Bầu trời nhuốm tông vàng ấm retro",
-      "Badge sáng vàng vintage",
-    ],
-    writeHint: "Có một ký ức cứ mãi quay lại trong đầu mình, đó là...",
+  },
+};
+
+const VIBE_LANG_META = {
+  vi: {
+    cozy: {
+      label: "Ấm Áp",
+      tagline: "Như góc cafe khuya, yên tĩnh và dịu dàng",
+      changes: [
+        "Accent cam vàng ấm trong toàn app",
+        "Bầu trời hoàng hôn nhẹ",
+        "Badge sáng tông cam ấm áp",
+      ],
+    },
+    dreamy: {
+      label: "Mơ Mộng",
+      tagline: "Như đêm trăng tím, ngân hà xa và những giấc mơ",
+      changes: [
+        "Accent tím lavender thơ mộng",
+        "Bầu trời đậm tím như giải ngân hà",
+        "Badge phát sáng tím mộng mơ",
+      ],
+    },
+    cyber: {
+      label: "Công Nghệ",
+      tagline: "Neon cyan sắc bén, digital và tương lai",
+      changes: [
+        "Accent neon cyan lạnh sắc bén",
+        "Bầu trời tông xanh digital",
+        "Badge phát sáng xanh neon",
+      ],
+    },
+    lofi: {
+      label: "Hoài Niệm",
+      tagline: "Amber hoài cổ, như cassette cũ và chiều mưa",
+      changes: [
+        "Accent vàng amber hoài niệm",
+        "Bầu trời tông vàng ấm retro",
+        "Badge sáng vàng vintage",
+      ],
+    },
+  },
+  en: {
+    cozy: {
+      label: "Cozy",
+      tagline: "Like a late-night cafe corner, quiet and gentle",
+      changes: [
+        "Warm orange-gold accents app-wide",
+        "Sky tinted with sunset glow",
+        "Badge glows in a warm orange tone",
+      ],
+    },
+    dreamy: {
+      label: "Dreamy",
+      tagline: "Purple moon night, distant galaxy and dreams",
+      changes: [
+        "Poetic lavender purple accents",
+        "Deep purple sky like the Milky Way",
+        "Badge glows in dreamy purple",
+      ],
+    },
+    cyber: {
+      label: "Cyber",
+      tagline: "Sharp neon cyan, digital and futuristic",
+      changes: [
+        "Cold and sharp neon cyan accents",
+        "Sky with a digital blue tone",
+        "Badge glows in neon cyan",
+      ],
+    },
+    lofi: {
+      label: "Nostalgic Lofi",
+      tagline: "Nostalgic amber, like old cassettes and rain",
+      changes: [
+        "Nostalgic amber gold accents",
+        "Sky with warm retro yellow tint",
+        "Badge glows in vintage gold",
+      ],
+    },
+  },
+};
+
+const PANEL_TRANSLATIONS = {
+  vi: {
+    selectVibe: "Chọn hệ cảm xúc (Vibe)",
+    changeName: "Đổi tên ẩn danh khác",
+    title: "Hệ cảm xúc (Vibe)",
+    subtitle: "Thay đổi màu sắc và không gian cảm xúc của bạn",
+    active: "Đang dùng",
+    applied: "✓ Đã chuyển!",
+    footer: "Vibe chỉ thay đổi giao diện của bạn — câu chuyện vẫn giữ ẩn danh hoàn toàn",
+  },
+  en: {
+    selectVibe: "Select emotional vibe",
+    changeName: "Change anonymous name",
+    title: "Emotional Vibe",
+    subtitle: "Change theme color and emotional space",
+    active: "Active",
+    applied: "✓ Applied!",
+    footer: "Vibe only changes your theme — stories remain completely anonymous",
   },
 };
 
 export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBadgeProps) {
   const { identity, regenerateIdentity, setIdentityVibe, hydrated } = useAppState();
-  const { user, isAuthenticated, signOut } = useAuth();
-  const router = useRouter();
+  const { lang } = useLanguage();
   const [showVibeSelector, setShowVibeSelector] = useState(false);
   const [justChanged, setJustChanged] = useState<IdentityVibe | null>(null);
 
   const activeVibe = identity.vibe || "cozy";
-  const meta = VIBE_META[activeVibe];
+  
+  const base = VIBE_BASE_META[activeVibe];
+  const langMeta = VIBE_LANG_META[lang][activeVibe];
+  const p = PANEL_TRANSLATIONS[lang];
+
+  const meta = {
+    ...base,
+    ...langMeta,
+  };
 
   if (!hydrated) {
     return <div className="h-9 w-24 animate-pulse rounded-full bg-white/8" />;
@@ -161,7 +230,7 @@ export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBad
         )}
       >
         <button
-          aria-label="Chọn hệ cảm xúc (Vibe)"
+          aria-label={p.selectVibe}
           onClick={() => setShowVibeSelector(!showVibeSelector)}
           className="orb-btn flex h-7 w-7 items-center justify-center rounded-full bg-white/5 transition-colors hover:bg-white/10"
           style={{
@@ -174,7 +243,7 @@ export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBad
 
         {!compact && (
           <span
-            className="text-xs font-semibold text-base-text-primary"
+            className="text-xs font-semibold text-base-text-primary animate-fade-in"
             suppressHydrationWarning
           >
             {identity.name}
@@ -182,7 +251,7 @@ export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBad
         )}
 
         <button
-          aria-label="Đổi tên ẩn danh khác"
+          aria-label={p.changeName}
           onClick={regenerateIdentity}
           className="orb-btn text-base-text-secondary/70 hover:text-base-text-primary p-0.5 transition-colors"
           style={{ minHeight: 0 }}
@@ -210,9 +279,9 @@ export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBad
             {/* Panel header */}
             <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
               <div>
-                <p className="text-xs font-bold text-base-text-primary">Hệ cảm xúc (Vibe)</p>
+                <p className="text-xs font-bold text-base-text-primary">{p.title}</p>
                 <p className="text-[10px] text-base-text-secondary/60 mt-0.5">
-                  Thay đổi màu sắc và không gian cảm xúc của bạn
+                  {p.subtitle}
                 </p>
               </div>
               <button
@@ -226,11 +295,12 @@ export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBad
 
             {/* Vibe options */}
             <div className="p-3 flex flex-col gap-2">
-              {(Object.keys(VIBE_META) as IdentityVibe[]).map((v) => {
-                const vm = VIBE_META[v];
+              {(Object.keys(VIBE_BASE_META) as IdentityVibe[]).map((v) => {
+                const vmBase = VIBE_BASE_META[v];
+                const vmLang = VIBE_LANG_META[lang][v];
                 const isActive = activeVibe === v;
                 const isJustChanged = justChanged === v;
-                const VibIcon = vm.icon;
+                const VibIcon = vmBase.icon;
 
                 return (
                   <motion.button
@@ -242,13 +312,13 @@ export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBad
                     style={{
                       minHeight: 0,
                       background: isActive
-                        ? vm.bgPreview
+                        ? vmBase.bgPreview
                         : "rgba(255,255,255,0.03)",
                       border: isActive
-                        ? `1px solid ${vm.accentColor}55`
+                        ? `1px solid ${vmBase.accentColor}55`
                         : "1px solid rgba(255,255,255,0.06)",
                       boxShadow: isActive
-                        ? `0 0 16px ${vm.accentColor}30`
+                        ? `0 0 16px ${vmBase.accentColor}30`
                         : "none",
                     }}
                   >
@@ -257,9 +327,9 @@ export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBad
                       <div
                         className="mt-0.5 h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-sm"
                         style={{
-                          background: `${vm.accentColor}20`,
-                          border: `1.5px solid ${vm.accentColor}55`,
-                          color: vm.accentColor,
+                          background: `${vmBase.accentColor}20`,
+                          border: `1.5px solid ${vmBase.accentColor}55`,
+                          color: vmBase.accentColor,
                         }}
                       >
                         <VibIcon size={15} />
@@ -269,17 +339,17 @@ export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBad
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-1">
                           <span className="text-xs font-bold text-base-text-primary">
-                            {vm.emoji} {vm.label}
+                            {vmBase.emoji} {vmLang.label}
                           </span>
                           {isActive && !isJustChanged && (
                             <span
                               className="rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
                               style={{
-                                background: `${vm.accentColor}25`,
-                                color: vm.accentColor,
+                                background: `${vmBase.accentColor}25`,
+                                color: vmBase.accentColor,
                               }}
                             >
-                              Đang dùng
+                              {p.active}
                             </span>
                           )}
                           {isJustChanged && (
@@ -288,26 +358,26 @@ export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBad
                               animate={{ scale: 1 }}
                               className="rounded-full px-1.5 py-0.5 text-[9px] font-bold"
                               style={{
-                                background: `${vm.accentColor}35`,
-                                color: vm.accentColor,
+                                background: `${vmBase.accentColor}35`,
+                                color: vmBase.accentColor,
                               }}
                             >
-                              ✓ Đã chuyển!
+                              {p.applied}
                             </motion.span>
                           )}
                         </div>
                         <p className="text-[10px] text-base-text-secondary/60 leading-snug mb-1.5">
-                          {vm.tagline}
+                          {vmLang.tagline}
                         </p>
 
                         {/* What changes */}
                         <div className="flex flex-col gap-0.5">
-                          {vm.changes.map((change, idx) => (
+                          {vmLang.changes.map((change, idx) => (
                             <p
                               key={idx}
                               className="text-[10px] text-base-text-secondary/50 flex items-center gap-1"
                             >
-                              <span style={{ color: vm.accentColor, fontSize: 8 }}>●</span>
+                              <span style={{ color: vmBase.accentColor, fontSize: 8 }}>●</span>
                               {change}
                             </p>
                           ))}
@@ -325,8 +395,7 @@ export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBad
               style={{ background: "rgba(255,255,255,0.02)" }}
             >
               <p className="text-[10px] text-base-text-secondary/40 leading-relaxed">
-                Vibe chỉ thay đổi giao diện của bạn —
-                <br />câu chuyện vẫn được giữ hoàn toàn ẩn danh
+                {p.footer}
               </p>
             </div>
           </motion.div>

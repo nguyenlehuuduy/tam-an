@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { SkyCanvas } from "@/components/canvas/SkyCanvas";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/context/LanguageContext";
+import { LangSwitcher } from "@/components/ui/LangSwitcher";
 import {
   Mail,
   ArrowRight,
   Shield,
   Eye,
-  EyeOff,
   Sparkles,
   Star,
   Lock,
@@ -20,39 +21,33 @@ import {
   RefreshCw,
 } from "lucide-react";
 
-// =====================================================
-// DATA
-// =====================================================
-
-/** Những lý do tạo tài khoản — hiện ở hero phase */
-const REASONS = [
-  { icon: Star, text: "Lưu lại mọi câu chuyện bạn đã chia sẻ" },
-  { icon: Eye, text: "Xem ai đã gửi tia sáng cho bạn" },
-  { icon: Sparkles, text: "Nhận lời khích lệ riêng từ vũ trụ" },
-  { icon: Shield, text: "An toàn tuyệt đối — không ai thấy email" },
-];
-
-/** Social proof floating whispers */
-const WHISPERS = [
-  "1,247 người đã tạo không gian bí mật",
-  "328 câu chuyện được chia sẻ hôm nay",
-  "Ai đó vừa nhận được một tia sáng ấm áp",
-];
-
-// =====================================================
-// COMPONENT
-// =====================================================
 type Phase = "welcome" | "email" | "check";
 
 export default function AuthPage() {
   const router = useRouter();
   const { isAuthenticated, hydrated, sendMagicLink, confirmMagicLink, pendingEmail } = useAuth();
+  const t = useT();
+
   const [phase, setPhase] = useState<Phase>("welcome");
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
   const [resendTimer, setResendTimer] = useState(30);
   const [whisperIdx, setWhisperIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Dynamic translated datasets
+  const reasons = [
+    { icon: Star, text: t.auth.reason1 },
+    { icon: Eye, text: t.auth.reason2 },
+    { icon: Sparkles, text: t.auth.reason3 },
+    { icon: Shield, text: t.auth.reason4 },
+  ];
+
+  const whispers = [
+    t.auth.socialProof1,
+    t.auth.socialProof2,
+    t.auth.socialProof3,
+  ];
 
   // Nếu đã đăng nhập → redirect về checkin
   useEffect(() => {
@@ -71,28 +66,28 @@ export default function AuthPage() {
   // Auto-confirm (giả lập magic link click) sau 3s ở phase check
   useEffect(() => {
     if (phase !== "check") return;
-    const t = setTimeout(() => {
+    const time = setTimeout(() => {
       confirmMagicLink();
       router.push("/checkin");
     }, 3000);
-    return () => clearTimeout(t);
+    return () => clearTimeout(time);
   }, [phase, confirmMagicLink, router]);
 
   // Resend countdown
   useEffect(() => {
     if (phase !== "check") return;
     if (resendTimer <= 0) return;
-    const t = setInterval(() => setResendTimer((p) => p - 1), 1000);
-    return () => clearInterval(t);
+    const interval = setInterval(() => setResendTimer((p) => p - 1), 1000);
+    return () => clearInterval(interval);
   }, [phase, resendTimer]);
 
   // Rotating whisper text
   useEffect(() => {
-    const t = setInterval(() => {
-      setWhisperIdx((p) => (p + 1) % WHISPERS.length);
+    const interval = setInterval(() => {
+      setWhisperIdx((p) => (p + 1) % whispers.length);
     }, 3500);
-    return () => clearInterval(t);
-  }, []);
+    return () => clearInterval(interval);
+  }, [whispers.length]);
 
   // Validate email
   function validateEmail(e: string): boolean {
@@ -103,11 +98,11 @@ export default function AuthPage() {
   function handleSubmitEmail() {
     const trimmed = email.trim();
     if (!trimmed) {
-      setEmailError("Nhập email để tiếp tục nhé");
+      setEmailError(t.auth.emailErrorEmpty);
       return;
     }
     if (!validateEmail(trimmed)) {
-      setEmailError("Email không hợp lệ rồi 🥲");
+      setEmailError(t.auth.emailErrorInvalid);
       return;
     }
     setEmailError("");
@@ -119,7 +114,6 @@ export default function AuthPage() {
   function handleResend() {
     if (resendTimer > 0) return;
     setResendTimer(30);
-    // Giả lập gửi lại
   }
 
   // Masked email for display
@@ -141,9 +135,13 @@ export default function AuthPage() {
 
   return (
     <SkyCanvas>
-      <div className="flex min-h-dvh w-full flex-col items-center justify-center px-5">
-        <AnimatePresence mode="wait">
+      <div className="flex min-h-dvh w-full flex-col items-center justify-center px-5 relative">
+        {/* Floating Language Switcher */}
+        <div className="absolute right-4 top-4 z-50 md:right-6 md:top-5">
+          <LangSwitcher />
+        </div>
 
+        <AnimatePresence mode="wait">
           {/* =============================================
               PHASE 1 — WELCOME HERO
               ============================================= */}
@@ -191,7 +189,7 @@ export default function AuthPage() {
                 transition={{ delay: 0.2 }}
                 className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-base-text-secondary/60"
               >
-                Trạm Phát Sáng
+                {t.auth.title}
               </motion.p>
 
               <motion.h1
@@ -200,9 +198,9 @@ export default function AuthPage() {
                 transition={{ delay: 0.32, duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
                 className="font-display text-3xl font-black leading-[1.15] tracking-tight text-base-text-primary md:text-4xl"
               >
-                Tạo không gian
+                {t.auth.heroHeading1}
                 <br />
-                <span className="shimmer-text">bí mật</span> của riêng bạn
+                <span className="shimmer-text">{t.auth.heroHeading2}</span> {t.auth.heroHeading3}
               </motion.h1>
 
               <motion.p
@@ -211,9 +209,7 @@ export default function AuthPage() {
                 transition={{ delay: 0.48 }}
                 className="mt-4 max-w-xs text-[15px] leading-[1.7] text-base-text-secondary"
               >
-                Một nơi chỉ bạn biết — để giữ lại những điều
-                <br className="hidden md:block" />
-                bạn đã viết ra, và nhận lại ánh sáng.
+                {t.auth.heroSub}
               </motion.p>
 
               {/* Reasons grid */}
@@ -223,7 +219,7 @@ export default function AuthPage() {
                 transition={{ delay: 0.62 }}
                 className="mt-8 grid w-full grid-cols-2 gap-3"
               >
-                {REASONS.map((r, i) => {
+                {reasons.map((r, i) => {
                   const Icon = r.icon;
                   return (
                     <motion.div
@@ -273,7 +269,7 @@ export default function AuthPage() {
                   }}
                 >
                   <span className="relative flex items-center justify-center gap-2">
-                    Bắt đầu hành trình
+                    {t.auth.cta}
                     <motion.span
                       animate={{ x: [0, 4, 0] }}
                       transition={{ duration: 1.4, repeat: Infinity }}
@@ -293,7 +289,7 @@ export default function AuthPage() {
                 className="orb-btn mt-5 text-xs text-base-text-secondary/50 hover:text-base-text-secondary transition-colors py-2"
                 style={{ minHeight: 0 }}
               >
-                Khám phá trước, tạo tài khoản sau →
+                {t.auth.skip}
               </motion.button>
 
               {/* Rotating social proof */}
@@ -312,7 +308,7 @@ export default function AuthPage() {
                     transition={{ duration: 0.4 }}
                     className="text-[11px] text-base-text-secondary"
                   >
-                    ✦ {WHISPERS[whisperIdx]}
+                    ✦ {whispers[whisperIdx]}
                   </motion.p>
                 </AnimatePresence>
               </motion.div>
@@ -324,7 +320,7 @@ export default function AuthPage() {
                 transition={{ delay: 1.5 }}
                 className="mt-4 text-[11px] text-base-text-secondary"
               >
-                🔒 Ẩn danh · An toàn · Riêng tư
+                {t.common.privacyFooter}
               </motion.p>
             </motion.div>
           )}
@@ -348,7 +344,7 @@ export default function AuthPage() {
                   style={{ minHeight: 0 }}
                 >
                   <ChevronLeft size={14} />
-                  Quay lại
+                  {t.common.back}
                 </motion.button>
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -381,7 +377,7 @@ export default function AuthPage() {
                 transition={{ delay: 0.1 }}
                 className="mb-2 font-display text-xl font-bold text-base-text-primary"
               >
-                Tạo không gian riêng
+                {t.auth.createPrivateSpace}
               </motion.h2>
               <motion.p
                 initial={{ opacity: 0, y: 8 }}
@@ -389,9 +385,7 @@ export default function AuthPage() {
                 transition={{ delay: 0.18 }}
                 className="mb-8 text-center text-sm text-base-text-secondary/70"
               >
-                Chỉ cần email — không cần mật khẩu,
-                <br />
-                không cần tên thật
+                {t.auth.emailInstructions}
               </motion.p>
 
               {/* Email input */}
@@ -477,7 +471,7 @@ export default function AuthPage() {
                 >
                   <span className="relative flex items-center justify-center gap-2">
                     <Send size={15} />
-                    Gửi đường dẫn bí mật
+                    {t.auth.sendMagicLink}
                     <ArrowRight size={14} />
                   </span>
                 </motion.button>
@@ -492,11 +486,7 @@ export default function AuthPage() {
               >
                 <Lock size={13} className="mt-0.5 shrink-0 text-purple-300/60" />
                 <p className="text-[11px] leading-relaxed text-base-text-secondary/50">
-                  Email chỉ dùng để đăng nhập.{" "}
-                  <span className="text-base-text-secondary/70">
-                    Không ai khác nhìn thấy được.
-                  </span>{" "}
-                  Trong app, bạn vẫn xuất hiện với tên ẩn danh.
+                  {t.auth.privacyNote}
                 </p>
               </motion.div>
 
@@ -509,7 +499,7 @@ export default function AuthPage() {
                 className="orb-btn mt-5 text-xs text-base-text-secondary/40 hover:text-base-text-secondary/60 transition-colors py-2"
                 style={{ minHeight: 0 }}
               >
-                Tiếp tục ẩn danh →
+                {t.auth.continueAnonymous}
               </motion.button>
             </motion.div>
           )}
@@ -565,7 +555,7 @@ export default function AuthPage() {
                 transition={{ delay: 0.15 }}
                 className="mb-2 font-display text-xl font-bold text-base-text-primary"
               >
-                Kiểm tra hộp thư ✉️
+                {t.auth.checkInbox}
               </motion.h2>
               <motion.p
                 initial={{ opacity: 0, y: 8 }}
@@ -573,7 +563,7 @@ export default function AuthPage() {
                 transition={{ delay: 0.25 }}
                 className="text-sm leading-relaxed text-base-text-secondary/70"
               >
-                Một đường dẫn bí mật đã được gửi tới
+                {t.auth.linkSent}
               </motion.p>
               <motion.p
                 initial={{ opacity: 0, y: 8 }}
@@ -590,9 +580,7 @@ export default function AuthPage() {
                 transition={{ delay: 0.42 }}
                 className="mt-5 text-xs text-base-text-secondary/50 leading-relaxed"
               >
-                Click vào link trong email
-                <br />
-                để mở khoá không gian của bạn
+                {t.auth.linkSentNote}
               </motion.p>
 
               {/* Resend */}
@@ -604,7 +592,7 @@ export default function AuthPage() {
               >
                 {resendTimer > 0 ? (
                   <p className="text-xs text-base-text-secondary/40">
-                    Chưa nhận được? Gửi lại sau{" "}
+                    {t.auth.resendAfter}{" "}
                     <span className="font-mono text-purple-300/60">{resendTimer}s</span>
                   </p>
                 ) : (
@@ -614,7 +602,7 @@ export default function AuthPage() {
                     style={{ minHeight: 0 }}
                   >
                     <RefreshCw size={12} />
-                    Gửi lại đường dẫn
+                    {t.auth.resendBtn}
                   </button>
                 )}
               </motion.div>
@@ -633,12 +621,11 @@ export default function AuthPage() {
                   <RefreshCw size={13} className="text-emerald-400/60" />
                 </motion.div>
                 <p className="text-[11px] text-emerald-400/70">
-                  <span className="font-semibold">Demo:</span> Tự động đăng nhập sau 3 giây...
+                  <span className="font-semibold">Demo:</span> {t.auth.demoIndicator}
                 </p>
               </motion.div>
             </motion.div>
           )}
-
         </AnimatePresence>
       </div>
     </SkyCanvas>

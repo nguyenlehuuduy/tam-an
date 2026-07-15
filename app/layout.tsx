@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AppStateProvider } from "@/context/AppStateContext";
 import { AuthProvider } from "@/context/AuthContext";
+import { LanguageProvider } from "@/context/LanguageContext";
 import { VibeSync } from "@/components/onboarding/VibeSync";
 
 export const metadata: Metadata = {
@@ -38,12 +39,14 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-base-gradient">
-        <AuthProvider>
-          <AppStateProvider>
-            <VibeSync />
-            <main className="app-frame">{children}</main>
-          </AppStateProvider>
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <AppStateProvider>
+              <VibeSync />
+              <main className="app-frame">{children}</main>
+            </AppStateProvider>
+          </AuthProvider>
+        </LanguageProvider>
       </body>
     </html>
   );
