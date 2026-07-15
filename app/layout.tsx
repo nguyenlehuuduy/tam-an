@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AppStateProvider } from "@/context/AppStateContext";
+import { VibeSync } from "@/components/onboarding/VibeSync";
 
 export const metadata: Metadata = {
   title: "Trạm Phát Sáng",
@@ -21,7 +22,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi" className="dark">
+    <html lang="vi" className="dark" data-vibe="cozy">
       <head>
         {/*
           Fonts are linked at runtime (not next/font/google) so this project
@@ -37,6 +38,7 @@ export default function RootLayout({
       </head>
       <body className="bg-base-gradient">
         <AppStateProvider>
+          <VibeSync />
           <main className="app-frame">{children}</main>
         </AppStateProvider>
       </body>
