@@ -62,8 +62,9 @@ export default function RitualPage() {
     setPhase("released");
 
     // Không highRisk → redirect thẳng /explore sau 2s
+    const fromParam = savedType === "star" ? "sky" : "ocean";
     if (!result?.highRisk) {
-      setTimeout(() => router.push("/explore"), 2000);
+      setTimeout(() => router.push(`/explore?from=${fromParam}`), 2000);
     }
   }
 
@@ -229,7 +230,7 @@ export default function RitualPage() {
                     <HotlineBanner />
                     <Button
                       accent={isStar ? "sky" : "ocean"}
-                      onClick={() => router.push("/explore")}
+                      onClick={() => router.push(`/explore?from=${isStar ? "sky" : "ocean"}`)}
                       className="mt-5 w-full font-bold"
                     >
                       Khám phá không gian →

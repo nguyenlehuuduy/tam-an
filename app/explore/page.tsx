@@ -1,17 +1,31 @@
 "use client";
 
-import { useMemo, useState, useRef, useEffect } from "react";
+import {
+  useMemo,
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  Suspense,
+} from "react";
 import Link from "next/link";
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
+import { useSearchParams } from "next/navigation";
+import {
+  motion,
+  AnimatePresence,
+  useMotionValue,
+  useSpring,
+  animate,
+} from "framer-motion";
 import {
   History,
   Plus,
   Volume2,
   VolumeX,
   Sparkles,
-  ChevronDown,
-  Compass,
   Eye,
+  Compass,
+  Waves,
 } from "lucide-react";
 import clsx from "clsx";
 import { SkyCanvas } from "@/components/canvas/SkyCanvas";
@@ -19,6 +33,7 @@ import { OceanCanvas } from "@/components/canvas/OceanCanvas";
 import { SignalOrb } from "@/components/canvas/SignalOrb";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { SignalCard } from "@/components/explore/SignalCard";
+import { ExploreMiniMap } from "@/components/explore/ExploreMiniMap";
 import { AnonymousIdentityBadge } from "@/components/onboarding/AnonymousIdentityBadge";
 import { useAppState } from "@/context/AppStateContext";
 import { Signal } from "@/lib/mockSignals";
@@ -27,7 +42,7 @@ import { playOpenSignal } from "@/lib/sound";
 type Space = "sky" | "ocean";
 
 // =====================================================
-// IMMERSIVE WHISPERS — xoay vòng tự động mỗi 4s
+// WHISPER TEXTS
 // =====================================================
 const SKY_WHISPERS = [
   "Mỗi ngôi sao là một câu chuyện ai đó đang giữ...",
@@ -45,33 +60,130 @@ const OCEAN_WHISPERS = [
   "Lắng nghe... biển đang kể chuyện",
 ];
 
-// Stats shown to create social presence
 const STATS_DATA = {
   sky: { count: 1247, label: "câu chuyện đang bay trên trời" },
   ocean: { count: 893, label: "bí mật đang chìm dưới biển" },
 };
 
+// Size of the draggable virtual canvas (3x viewport)
+const CANVAS_SCALE = 3;
+
 export default function ExplorePage() {
+  return (
+    <Suspense fallback={null}>
+      <ExplorePageContent />
+    </Suspense>
+  );
+}
+
+function ExplorePageContent() {
+  const searchParams = useSearchParams();
   const { signals, soundEnabled, toggleSound, encouragedSignalIds } = useAppState();
-  const [space, setSpace] = useState<Space>("sky");
+
+  // Detect incoming space from URL param (e.g. /explore?from=ocean)
+  const fromParam = searchParams.get("from");
+  const initialSpace: Space =
+    fromParam === "ocean" ? "ocean" : "sky";
+
+  const [space, setSpace] = useState<Space>(initialSpace);
   const [openSignal, setOpenSignal] = useState<Signal | null>(null);
   const [whisperIdx, setWhisperIdx] = useState(0);
   const [showIntro, setShowIntro] = useState(true);
   const [mounted, setMounted] = useState(false);
-
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  // 3D Parallax camera tracking
-  const dragX = useMotionValue(0);
-  const dragY = useMotionValue(0);
-  const springX = useSpring(dragX, { stiffness: 100, damping: 30 });
-  const springY = useSpring(dragY, { stiffness: 100, damping: 30 });
-  const parallaxLayer1X = useTransform(springX, [-1000, 1000], [-30, 30]);
-  const parallaxLayer1Y = useTransform(springY, [-1000, 1000], [-30, 30]);
+  const [windowSize, setWindowSize] = useState({ w: 390, h: 844 });
 
   const isSky = space === "sky";
   const whispers = isSky ? SKY_WHISPERS : OCEAN_WHISPERS;
   const stats = STATS_DATA[space];
+
+  // =====================================================
+  // SMOOTH POINTER DRAG ENGINE
+  // Uses raw pointer events for zero-lag panning.
+  // No framer-motion drag — avoids re-render jank.
+  // =====================================================
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+  const lastPos = useRef({ x: 0, y: 0 });
+  const velocity = useRef({ x: 0, y: 0 });
+  const inertiaFrame = useRef<number | null>(null);
+
+  // MotionValues hold the canvas offset
+  const rawX = useMotionValue(0);
+  const rawY = useMotionValue(0);
+  // Smooth spring layer for parallax backgrounds
+  const springX = useSpring(rawX, { stiffness: 80, damping: 22 });
+  const springY = useSpring(rawY, { stiffness: 80, damping: 22 });
+
+  // Canvas boundaries: canvas is CANVAS_SCALE times the viewport
+  const getBounds = useCallback(() => {
+    const { w, h } = windowSize;
+    const maxX = 0;
+    const minX = -(w * (CANVAS_SCALE - 1));
+    const maxY = 0;
+    const minY = -(h * (CANVAS_SCALE - 1));
+    return { minX, maxX, minY, maxY };
+  }, [windowSize]);
+
+  function clamp(val: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, val));
+  }
+
+  const applyInertia = useCallback(() => {
+    velocity.current.x *= 0.93;
+    velocity.current.y *= 0.93;
+    const bounds = getBounds();
+    rawX.set(clamp(rawX.get() + velocity.current.x, bounds.minX, bounds.maxX));
+    rawY.set(clamp(rawY.get() + velocity.current.y, bounds.minY, bounds.maxY));
+    if (Math.abs(velocity.current.x) > 0.3 || Math.abs(velocity.current.y) > 0.3) {
+      inertiaFrame.current = requestAnimationFrame(applyInertia);
+    }
+  }, [getBounds, rawX, rawY]);
+
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    // Ignore if clicking on a signal orb (pointer-events-auto children)
+    if ((e.target as HTMLElement).closest("[data-signal-orb]")) return;
+    isDragging.current = true;
+    lastPos.current = { x: e.clientX, y: e.clientY };
+    velocity.current = { x: 0, y: 0 };
+    if (inertiaFrame.current) cancelAnimationFrame(inertiaFrame.current);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }, [inertiaFrame]);
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isDragging.current) return;
+    const dx = e.clientX - lastPos.current.x;
+    const dy = e.clientY - lastPos.current.y;
+    lastPos.current = { x: e.clientX, y: e.clientY };
+    velocity.current = { x: dx, y: dy };
+    const bounds = getBounds();
+    rawX.set(clamp(rawX.get() + dx, bounds.minX, bounds.maxX));
+    rawY.set(clamp(rawY.get() + dy, bounds.minY, bounds.maxY));
+  }, [getBounds, rawX, rawY]);
+
+  const onPointerUp = useCallback(() => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    inertiaFrame.current = requestAnimationFrame(applyInertia);
+  }, [applyInertia]);
+
+  // Teleport (from mini-map click)
+  function handleTeleport(tx: number, ty: number) {
+    const bounds = getBounds();
+    const cx = clamp(tx, bounds.minX, bounds.maxX);
+    const cy = clamp(ty, bounds.minY, bounds.maxY);
+    animate(rawX, cx, { type: "spring", stiffness: 150, damping: 25 });
+    animate(rawY, cy, { type: "spring", stiffness: 150, damping: 25 });
+  }
+
+  // Update window size on mount / resize
+  useEffect(() => {
+    function update() {
+      setWindowSize({ w: window.innerWidth, h: window.innerHeight });
+    }
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   useEffect(() => setMounted(true), []);
 
@@ -83,13 +195,13 @@ export default function ExplorePage() {
     return () => clearInterval(t);
   }, [whispers.length]);
 
-  // Auto-dismiss intro after 3s
+  // Auto-dismiss intro after 3.5s
   useEffect(() => {
     const t = setTimeout(() => setShowIntro(false), 3500);
     return () => clearTimeout(t);
   }, []);
 
-  // Reset whisper index on space change
+  // Reset whisper on space change
   useEffect(() => {
     setWhisperIdx(0);
   }, [space]);
@@ -99,19 +211,19 @@ export default function ExplorePage() {
     [signals, isSky]
   );
 
-  // Sinh các hạt nền (sao/bong bóng trang trí) lơ lửng ngẫu nhiên trong không gian ảo
+  // Ambient decorative particles (stars / bubbles)
   const ambientElements = useMemo(() => {
     return Array.from({ length: 80 }, (_, i) => {
       const rand = (max: number) => Math.random() * max;
-      const depth = rand(0.7) + 0.15; // 0.15 -> 0.85
+      const depth = rand(0.7) + 0.15;
       return {
         id: `ambient-${i}`,
         x: rand(90) + 5,
         y: rand(90) + 5,
-        size: rand(6) + 2, // Kích thước ngẫu nhiên
+        size: rand(5) + 1.5,
         depth,
-        opacity: rand(0.4) + 0.15,
-        twinkleSpeed: rand(3.5) + 2, // Tốc độ lấp lánh/nhấp nháy
+        opacity: rand(0.4) + 0.12,
+        twinkleSpeed: rand(3) + 2,
       };
     });
   }, []);
@@ -121,63 +233,18 @@ export default function ExplorePage() {
     if (soundEnabled) playOpenSignal();
   }
 
-  function handleMouseMove(e: React.MouseEvent) {
-    // Optionally keep mouse parallax for background layers if needed,
-    // but the main effect is now drag-based 3D parallax.
-  }
-
-  // Wrapper cho từng tín hiệu để tạo hiệu ứng 3D Parallax
-  const ParallaxSignal = ({ signal, idx, isEncouraged }: { signal: Signal; idx: number; isEncouraged: boolean }) => {
-    // Tính toán độ sâu (depth) ảo dựa trên ID để tạo layer 3D
-    const depth = useMemo(() => {
-      let hash = 0;
-      for (let i = 0; i < signal.id.length; i++) hash = signal.id.charCodeAt(i) + ((hash << 5) - hash);
-      return (Math.abs(hash) % 100) / 100; // Giá trị 0 -> 1
-    }, [signal.id]);
-
-    // Các object ở xa (depth thấp) sẽ di chuyển ngược lại nhẹ để giảm tốc độ drag
-    // Các object ở gần (depth cao) sẽ di chuyển nhanh hơn
-    // springX, springY chính là vị trí drag hiện tại
-    const offsetX = useTransform(springX, v => v * (depth - 0.5) * 1.5);
-    const offsetY = useTransform(springY, v => v * (depth - 0.5) * 1.5);
-    
-    // Scale object dựa theo độ sâu để tạo cảm giác gần/xa
-    const scale = 0.7 + depth * 0.6;
-
-    return (
-      <motion.div
-        key={signal.id}
-        initial={{ opacity: 0, scale: 0 }}
-        animate={{ opacity: 1, scale: scale }}
-        exit={{ opacity: 0, scale: 0 }}
-        transition={{
-          delay: showIntro ? 3.5 + idx * 0.06 : idx * 0.04,
-          type: "spring",
-          stiffness: 200,
-          damping: 20,
-        }}
-        style={{ x: offsetX, y: offsetY, zIndex: Math.floor(depth * 100) + 20 }}
-        className="absolute inset-0 pointer-events-none" // Wrapper full màn hình nhưng KHÔNG chặn sự kiện vì pointer-events-none
-      >
-        <SignalOrb
-          signal={signal}
-          onTap={handleTap}
-          isEncouraged={isEncouraged}
-        />
-      </motion.div>
-    );
-  };
-
   const Canvas = isSky ? SkyCanvas : OceanCanvas;
+
+  // Canvas pixel dimensions
+  const canvasW = windowSize.w * CANVAS_SCALE;
+  const canvasH = windowSize.h * CANVAS_SCALE;
 
   return (
     <Canvas mouseX={springX} mouseY={springY}>
-      <div
-        className="relative flex h-dvh w-full flex-col overflow-hidden"
-        onMouseMove={handleMouseMove}
-      >
+      <div className="relative flex h-dvh w-full flex-col overflow-hidden">
+
         {/* ======================================================
-            INTRO OVERLAY — Dramatic entrance (auto-dismiss 3.5s)
+            INTRO OVERLAY
             ====================================================== */}
         <AnimatePresence>
           {showIntro && (
@@ -188,7 +255,9 @@ export default function ExplorePage() {
               transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
               className="absolute inset-0 z-50 flex flex-col items-center justify-center"
               style={{
-                background: "radial-gradient(ellipse at 50% 50%, rgba(6,10,19,0.95) 0%, rgba(6,10,19,0.99) 70%)",
+                background: isSky
+                  ? "radial-gradient(ellipse at 50% 50%, rgba(6,10,19,0.97) 0%, rgba(6,10,19,0.99) 70%)"
+                  : "radial-gradient(ellipse at 50% 60%, rgba(3,16,32,0.97) 0%, rgba(3,16,32,0.99) 70%)",
               }}
             >
               <motion.div
@@ -197,27 +266,45 @@ export default function ExplorePage() {
                 transition={{ delay: 0.2, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
                 className="text-center"
               >
+                {/* Icon */}
                 <motion.div
                   className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full"
-                  animate={{ boxShadow: [
-                    "0 0 30px rgba(162,119,255,0.4)",
-                    "0 0 70px rgba(162,119,255,0.6)",
-                    "0 0 30px rgba(162,119,255,0.4)",
-                  ]}}
-                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                  animate={{
+                    boxShadow: isSky
+                      ? [
+                          "0 0 30px rgba(162,119,255,0.4)",
+                          "0 0 70px rgba(162,119,255,0.6)",
+                          "0 0 30px rgba(162,119,255,0.4)",
+                        ]
+                      : [
+                          "0 0 30px rgba(79,209,197,0.4)",
+                          "0 0 70px rgba(79,209,197,0.65)",
+                          "0 0 30px rgba(79,209,197,0.4)",
+                        ],
+                  }}
+                  transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
                   style={{
-                    background: "radial-gradient(circle at 40% 40%, rgba(162,119,255,0.4), rgba(45,31,94,0.7))",
-                    border: "1px solid rgba(162,119,255,0.4)",
+                    background: isSky
+                      ? "radial-gradient(circle at 40% 40%, rgba(162,119,255,0.4), rgba(45,31,94,0.7))"
+                      : "radial-gradient(circle at 40% 40%, rgba(79,209,197,0.35), rgba(5,35,55,0.75))",
+                    border: isSky
+                      ? "1px solid rgba(162,119,255,0.4)"
+                      : "1px solid rgba(79,209,197,0.4)",
                   }}
                 >
-                  <Compass size={28} className="text-[#d8b4fe]" />
+                  {isSky ? (
+                    <Compass size={28} className="text-[#d8b4fe]" />
+                  ) : (
+                    <Waves size={28} className="text-[#4FD1C5]" />
+                  )}
                 </motion.div>
 
                 <motion.p
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
-                  className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-aurora/60 mb-3"
+                  className="text-xs font-semibold uppercase tracking-[0.3em] mb-3"
+                  style={{ color: isSky ? "rgba(162,119,255,0.6)" : "rgba(79,209,197,0.6)" }}
                 >
                   Bạn đang bước vào
                 </motion.p>
@@ -227,21 +314,36 @@ export default function ExplorePage() {
                   transition={{ delay: 0.55, duration: 0.5 }}
                   className="font-display text-2xl font-black text-base-text-primary mb-2"
                 >
-                  Không gian {isSky ? "bầu trời" : "đại dương"}
+                  {isSky ? "Không gian Bầu Trời ✦" : "Đại Dương Bao La ◎"}
                 </motion.h1>
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 0.5 }}
-                  transition={{ delay: 0.75 }}
-                  className="text-xs text-base-text-secondary"
+                  transition={{ delay: 0.7 }}
+                  className="text-xs text-base-text-secondary mb-1"
                 >
                   {mounted ? stats.count.toLocaleString() : "—"} {stats.label}
                 </motion.p>
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 0.35 }}
+                  transition={{ delay: 0.85 }}
+                  className="text-[10px] text-base-text-secondary"
+                >
+                  {isSky
+                    ? "Kéo để khám phá dải ngân hà câu chuyện"
+                    : "Kéo để lặn sâu vào lòng đại dương bí ẩn"}
+                </motion.p>
 
-                {/* Loading progress bar */}
+                {/* Progress bar */}
                 <motion.div className="mx-auto mt-6 h-0.5 w-32 rounded-full bg-white/10 overflow-hidden">
                   <motion.div
-                    className="h-full rounded-full bg-sky-aurora/60"
+                    className="h-full rounded-full"
+                    style={{
+                      background: isSky
+                        ? "rgba(162,119,255,0.7)"
+                        : "rgba(79,209,197,0.7)",
+                    }}
                     initial={{ width: "0%" }}
                     animate={{ width: "100%" }}
                     transition={{ duration: 3.2, ease: "linear" }}
@@ -253,12 +355,12 @@ export default function ExplorePage() {
         </AnimatePresence>
 
         {/* ======================================================
-            HEADER — Compact, floating glass
+            HEADER
             ====================================================== */}
         <motion.header
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: showIntro ? 0 : 1, y: showIntro ? -20 : 0 }}
-          transition={{ duration: 0.5, delay: showIntro ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.5, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
           className="z-20 w-full px-4 pt-4 md:px-6 md:pt-5"
         >
           <div
@@ -270,10 +372,9 @@ export default function ExplorePage() {
               boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
             }}
           >
-            {/* Left — Identity */}
             <AnonymousIdentityBadge compact />
 
-            {/* Center — Space switcher */}
+            {/* Space switcher */}
             <div className="flex items-center bg-white/[0.04] rounded-xl p-1 border border-white/6">
               <button
                 onClick={() => setSpace("sky")}
@@ -301,7 +402,6 @@ export default function ExplorePage() {
               </button>
             </div>
 
-            {/* Right — Sound + History */}
             <div className="flex items-center gap-1.5">
               <button
                 aria-label={soundEnabled ? "Tắt âm thanh" : "Bật âm thanh"}
@@ -323,7 +423,7 @@ export default function ExplorePage() {
         </motion.header>
 
         {/* ======================================================
-            WHISPER BAR — auto-rotating immersive hints
+            WHISPER BAR
             ====================================================== */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -349,114 +449,128 @@ export default function ExplorePage() {
         </motion.div>
 
         {/* ======================================================
-            DRAGGABLE SPACE CANVAS — signals floating
+            DRAGGABLE SPACE CANVAS — pointer event driven
             ====================================================== */}
         <div
-          ref={containerRef}
+          ref={canvasRef}
           className="relative flex-1 w-full overflow-hidden z-10"
+          style={{ cursor: "grab", userSelect: "none", touchAction: "none" }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerLeave={onPointerUp}
         >
+          {/* Virtual canvas — panned by rawX/rawY */}
           <motion.div
-            drag
-            dragConstraints={{ left: -1800, right: 1800, top: -1800, bottom: 1800 }}
-            dragElastic={0.25}
-            initial={{ x: -600, y: -600 }}
-            className="absolute w-[300%] h-[300%] cursor-grab active:cursor-grabbing origin-center"
+            className="absolute origin-top-left pointer-events-none"
             style={{
-              touchAction: "none",
-              x: dragX,
-              y: dragY,
+              width: canvasW,
+              height: canvasH,
+              x: rawX,
+              y: rawY,
             }}
           >
-            {/* Thêm một lớp tinh vân nền trôi nhẹ khi drag */}
-            <motion.div 
-              className="absolute inset-0 pointer-events-none opacity-40 blur-[80px]"
+            {/* Subtle nebula glow */}
+            <div
+              className="absolute inset-0 opacity-30 blur-[100px] pointer-events-none"
               style={{
-                background: isSky 
-                  ? "radial-gradient(circle at 50% 50%, rgba(162,119,255,0.15) 0%, transparent 60%)" 
-                  : "radial-gradient(circle at 50% 50%, rgba(79,209,197,0.1) 0%, transparent 60%)"
+                background: isSky
+                  ? "radial-gradient(circle at 50% 50%, rgba(162,119,255,0.2) 0%, transparent 60%)"
+                  : "radial-gradient(circle at 50% 50%, rgba(79,209,197,0.12) 0%, transparent 60%)",
               }}
             />
 
-            {/* Ambient decorative elements inside the draggable galaxy/ocean */}
-            {ambientElements.map((el, i) => {
-              const offsetX = useTransform(springX, (v) => v * (el.depth - 0.5) * 1.3);
-              const offsetY = useTransform(springY, (v) => v * (el.depth - 0.5) * 1.3);
-              
-              if (isSky) {
-                return (
-                  <motion.span
-                    key={el.id}
-                    className="absolute rounded-full pointer-events-none"
-                    style={{
-                      top: `${el.y}%`,
-                      left: `${el.x}%`,
-                      width: el.size * 0.8,
-                      height: el.size * 0.8,
-                      x: offsetX,
-                      y: offsetY,
-                      opacity: el.opacity,
-                      background: i % 3 === 0 ? "#A8C8FF" : i % 5 === 0 ? "#F5D67D" : "#FFFFFF",
-                      boxShadow: el.size > 5 ? "0 0 6px rgba(255,255,255,0.4)" : "none",
-                      animation: `twinkle ${el.twinkleSpeed}s ease-in-out infinite`,
-                    }}
-                  />
-                );
-              } else {
-                return (
-                  <motion.span
-                    key={el.id}
-                    className="absolute rounded-full pointer-events-none"
-                    style={{
-                      top: `${el.y}%`,
-                      left: `${el.x}%`,
-                      width: el.size * 1.2,
-                      height: el.size * 1.2,
-                      x: offsetX,
-                      y: offsetY,
-                      opacity: el.opacity,
-                      background: "radial-gradient(circle at 35% 30%, rgba(184,233,224,0.3) 0%, rgba(79,209,197,0.05) 70%)",
-                      border: "0.8px solid rgba(184,233,224,0.18)",
-                      boxShadow: "inset 0 0 3px rgba(255,255,255,0.1)",
-                      animation: `twinkle ${el.twinkleSpeed}s ease-in-out infinite`,
-                    }}
-                  />
-                );
-              }
-            })}
-
-            <AnimatePresence>
-              {visible.map((s, i) => (
-                <ParallaxSignal
-                  key={s.id}
-                  signal={s}
-                  idx={i}
-                  isEncouraged={encouragedSignalIds.includes(s.id)}
+            {/* Ambient decorative particles */}
+            {ambientElements.map((el, i) =>
+              isSky ? (
+                <span
+                  key={el.id}
+                  className="absolute rounded-full pointer-events-none"
+                  style={{
+                    top: `${el.y}%`,
+                    left: `${el.x}%`,
+                    width: el.size * 0.8,
+                    height: el.size * 0.8,
+                    opacity: el.opacity,
+                    background:
+                      i % 3 === 0 ? "#A8C8FF" : i % 5 === 0 ? "#F5D67D" : "#FFFFFF",
+                    boxShadow: el.size > 4 ? "0 0 5px rgba(255,255,255,0.4)" : "none",
+                    animation: `twinkle ${el.twinkleSpeed}s ease-in-out infinite`,
+                  }}
                 />
-              ))}
+              ) : (
+                <span
+                  key={el.id}
+                  className="absolute rounded-full pointer-events-none"
+                  style={{
+                    top: `${el.y}%`,
+                    left: `${el.x}%`,
+                    width: el.size * 1.2,
+                    height: el.size * 1.2,
+                    opacity: el.opacity,
+                    background:
+                      "radial-gradient(circle at 35% 30%, rgba(184,233,224,0.3) 0%, rgba(79,209,197,0.05) 70%)",
+                    border: "0.8px solid rgba(184,233,224,0.18)",
+                    animation: `twinkle ${el.twinkleSpeed}s ease-in-out infinite`,
+                  }}
+                />
+              )
+            )}
+
+            {/* Signal Orbs — pointer-events-auto via data-signal-orb */}
+            <AnimatePresence>
+              {visible.map((s, i) => {
+                // Convert signal's percentage position to pixel position in canvas
+                const px = (s.x / 100) * canvasW;
+                const py = (s.y / 100) * canvasH;
+                return (
+                  <motion.div
+                    key={s.id}
+                    data-signal-orb="true"
+                    className="absolute pointer-events-auto"
+                    style={{ left: px, top: py, transform: "translate(-50%, -50%)" }}
+                    initial={{ opacity: 0, scale: 0 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0 }}
+                    transition={{
+                      delay: showIntro ? 3.5 + i * 0.06 : i * 0.04,
+                      type: "spring",
+                      stiffness: 220,
+                      damping: 18,
+                    }}
+                  >
+                    <SignalOrb
+                      signal={s}
+                      onTap={handleTap}
+                      isEncouraged={encouragedSignalIds.includes(s.id)}
+                    />
+                  </motion.div>
+                );
+              })}
             </AnimatePresence>
           </motion.div>
 
-          {/* Depth hint — subtle edge gradients */}
+          {/* Edge gradient overlays */}
           <div
             className="pointer-events-none absolute inset-x-0 top-0 h-16 z-20"
             style={{
               background: isSky
-                ? "linear-gradient(180deg, rgba(6,10,19,0.85) 0%, rgba(6,10,19,0.3) 50%, transparent 100%)"
-                : "linear-gradient(180deg, rgba(3,16,32,0.85) 0%, rgba(3,16,32,0.3) 50%, transparent 100%)",
+                ? "linear-gradient(180deg, rgba(6,10,19,0.85) 0%, transparent 100%)"
+                : "linear-gradient(180deg, rgba(3,16,32,0.85) 0%, transparent 100%)",
             }}
           />
           <div
             className="pointer-events-none absolute inset-x-0 bottom-0 h-24 z-20"
             style={{
               background: isSky
-                ? "linear-gradient(0deg, rgba(6,10,19,0.9) 0%, rgba(6,10,19,0.4) 60%, transparent 100%)"
-                : "linear-gradient(0deg, rgba(3,16,32,0.9) 0%, rgba(3,16,32,0.4) 60%, transparent 100%)",
+                ? "linear-gradient(0deg, rgba(6,10,19,0.9) 0%, transparent 100%)"
+                : "linear-gradient(0deg, rgba(3,16,32,0.9) 0%, transparent 100%)",
             }}
           />
         </div>
 
         {/* ======================================================
-            BOTTOM AREA — Stats + FAB
+            BOTTOM AREA — Stats + FAB + Mini-Map
             ====================================================== */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -466,9 +580,7 @@ export default function ExplorePage() {
         >
           {/* Live stat counter */}
           <div className="text-center mb-4">
-            <motion.p
-              className="text-[10px] text-base-text-secondary/35 flex items-center justify-center gap-1.5"
-            >
+            <motion.p className="text-[10px] text-base-text-secondary/35 flex items-center justify-center gap-1.5">
               <span className="relative flex h-1.5 w-1.5">
                 <span
                   className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-50"
@@ -483,60 +595,76 @@ export default function ExplorePage() {
             </motion.p>
           </div>
 
-          {/* Floating Action Button */}
-          <div className="flex justify-center pointer-events-none">
-            <motion.div
-              initial={{ y: 20, scale: 0.9 }}
-              animate={{ y: 0, scale: 1 }}
-              transition={{ delay: 0.8, type: "spring", stiffness: 260, damping: 22 }}
-              className="pointer-events-auto relative"
-            >
-              {/* Glow pulses */}
-              <motion.div
-                className="absolute inset-0 rounded-full pointer-events-none"
-                animate={{ scale: [1, 1.5, 1], opacity: [0.4, 0, 0.4] }}
-                transition={{ duration: 2.5, repeat: Infinity }}
-                style={{
-                  background: isSky
-                    ? "rgba(124,158,255,0.3)"
-                    : "rgba(79,209,197,0.3)",
-                }}
-              />
-              <motion.div
-                className="absolute inset-0 rounded-full pointer-events-none"
-                animate={{ scale: [1, 2, 1], opacity: [0.2, 0, 0.2] }}
-                transition={{ duration: 3, repeat: Infinity, delay: 0.5 }}
-                style={{
-                  background: isSky
-                    ? "rgba(192,132,252,0.2)"
-                    : "rgba(79,209,197,0.15)",
-                }}
-              />
+          {/* FAB + Mini-Map row */}
+          <div className="flex items-end justify-between gap-3">
+            {/* Mini-Map — bottom left */}
+            <ExploreMiniMap
+              dragX={rawX}
+              dragY={rawY}
+              signals={visible}
+              isSky={isSky}
+              canvasW={canvasW}
+              canvasH={canvasH}
+              viewW={windowSize.w}
+              viewH={windowSize.h}
+              onTeleport={handleTeleport}
+            />
 
-              <Link
-                href="/checkin"
-                className={clsx(
-                  "relative flex items-center gap-2 rounded-full px-7 py-3.5 text-sm font-bold text-white transition-all duration-300 hover:scale-105 active:scale-95"
-                )}
-                style={{
-                  background: isSky
-                    ? "linear-gradient(135deg, #2D1F5E 0%, #7C9EFF 50%, #C084FC 100%)"
-                    : "linear-gradient(135deg, #072034 0%, #0E4D5C 50%, #4FD1C5 100%)",
-                  boxShadow: isSky
-                    ? "0 0 36px rgba(124,158,255,0.5), 0 6px 24px rgba(0,0,0,0.45)"
-                    : "0 0 36px rgba(79,209,197,0.45), 0 6px 24px rgba(0,0,0,0.45)",
-                }}
+            {/* Floating Action Button — bottom right area (centered) */}
+            <div className="flex-1 flex justify-center pointer-events-none">
+              <motion.div
+                initial={{ y: 20, scale: 0.9 }}
+                animate={{ y: 0, scale: 1 }}
+                transition={{ delay: 0.8, type: "spring", stiffness: 260, damping: 22 }}
+                className="pointer-events-auto relative"
               >
-                <Plus size={16} />
-                Chia sẻ tâm sự
-              </Link>
-            </motion.div>
+                {/* Glow rings */}
+                <motion.div
+                  className="absolute inset-0 rounded-full pointer-events-none"
+                  animate={{ scale: [1, 1.5, 1], opacity: [0.4, 0, 0.4] }}
+                  transition={{ duration: 2.5, repeat: Infinity }}
+                  style={{
+                    background: isSky
+                      ? "rgba(124,158,255,0.3)"
+                      : "rgba(79,209,197,0.3)",
+                  }}
+                />
+                <motion.div
+                  className="absolute inset-0 rounded-full pointer-events-none"
+                  animate={{ scale: [1, 2, 1], opacity: [0.2, 0, 0.2] }}
+                  transition={{ duration: 3, repeat: Infinity, delay: 0.5 }}
+                  style={{
+                    background: isSky
+                      ? "rgba(192,132,252,0.2)"
+                      : "rgba(79,209,197,0.15)",
+                  }}
+                />
+                <Link
+                  href="/checkin"
+                  className="relative flex items-center gap-2 rounded-full px-7 py-3.5 text-sm font-bold text-white transition-all duration-300 hover:scale-105 active:scale-95"
+                  style={{
+                    background: isSky
+                      ? "linear-gradient(135deg, #2D1F5E 0%, #7C9EFF 50%, #C084FC 100%)"
+                      : "linear-gradient(135deg, #072034 0%, #0E4D5C 50%, #4FD1C5 100%)",
+                    boxShadow: isSky
+                      ? "0 0 36px rgba(124,158,255,0.5), 0 6px 24px rgba(0,0,0,0.45)"
+                      : "0 0 36px rgba(79,209,197,0.45), 0 6px 24px rgba(0,0,0,0.45)",
+                  }}
+                >
+                  <Plus size={16} />
+                  Chia sẻ tâm sự
+                </Link>
+              </motion.div>
+            </div>
+
+            {/* Spacer to balance the map */}
+            <div style={{ width: 140 }} />
           </div>
         </motion.div>
       </div>
 
       {/* ======================================================
-          BOTTOM SHEET — Signal detail card
+          BOTTOM SHEET — Signal detail
           ====================================================== */}
       <BottomSheet open={openSignal !== null} onClose={() => setOpenSignal(null)}>
         {openSignal && <SignalCard signal={openSignal} />}
