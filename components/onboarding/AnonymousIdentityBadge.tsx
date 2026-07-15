@@ -19,7 +19,9 @@ import {
 } from "lucide-react";
 import { IdentityIcon, IdentityVibe } from "@/lib/identity";
 import { useAppState } from "@/context/AppStateContext";
+import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 
@@ -128,6 +130,8 @@ const VIBE_META: Record<IdentityVibe, VibeMeta> = {
 
 export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBadgeProps) {
   const { identity, regenerateIdentity, setIdentityVibe, hydrated } = useAppState();
+  const { user, isAuthenticated, signOut } = useAuth();
+  const router = useRouter();
   const [showVibeSelector, setShowVibeSelector] = useState(false);
   const [justChanged, setJustChanged] = useState<IdentityVibe | null>(null);
 

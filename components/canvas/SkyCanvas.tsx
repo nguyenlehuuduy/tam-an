@@ -1,10 +1,13 @@
 "use client";
 
 import { ReactNode, useMemo } from "react";
+import { motion, useTransform, useMotionValue } from "framer-motion";
 
 interface SkyCanvasProps {
   children?: ReactNode;
   className?: string;
+  mouseX?: any;
+  mouseY?: any;
 }
 
 interface BgStar {
@@ -99,158 +102,185 @@ function useMilkyWayStars(count: number): MilkyWayStar[] {
   );
 }
 
-export function SkyCanvas({ children, className }: SkyCanvasProps) {
+export function SkyCanvas({ children, className, mouseX, mouseY }: SkyCanvasProps) {
   const stars = useBackgroundStars(120);
   const shootingStars = useShootingStars(6);
   const milkyWayStars = useMilkyWayStars(80);
+
+  const fallbackValue = useMotionValue(0);
+  const mX = mouseX || fallbackValue;
+  const mY = mouseY || fallbackValue;
+
+  // Parallax offsets: layers further back move slower
+  const nebulaX = useTransform(mX, (v: number) => v * 0.05);
+  const nebulaY = useTransform(mY, (v: number) => v * 0.05);
+
+  const milkyWayX = useTransform(mX, (v: number) => v * 0.12);
+  const milkyWayY = useTransform(mY, (v: number) => v * 0.12);
+
+  const starFieldX = useTransform(mX, (v: number) => v * 0.22);
+  const starFieldY = useTransform(mY, (v: number) => v * 0.22);
+
+  const shootingStarX = useTransform(mX, (v: number) => v * 0.18);
+  const shootingStarY = useTransform(mY, (v: number) => v * 0.18);
 
   return (
     <div className={`relative min-h-dvh w-full overflow-hidden bg-sky-gradient ${className ?? ""}`}>
 
       {/* ===== MILKY WAY BAND ===== */}
-      {/* Lớp sương mờ dải ngân hà */}
-      <div
-        className="pointer-events-none absolute inset-0 milky-way-band"
-        style={{ opacity: 0.8 }}
-      />
-      {/* Dải ngân hà đậm ở trung tâm */}
-      <div
-        className="pointer-events-none absolute"
-        style={{
-          top: "10%",
-          left: "-10%",
-          width: "120%",
-          height: "55%",
-          background:
-            "linear-gradient(125deg, transparent 0%, rgba(180,190,255,0.03) 15%, rgba(210,200,255,0.055) 30%, rgba(255,240,200,0.04) 45%, rgba(200,215,255,0.06) 60%, rgba(180,190,255,0.03) 75%, transparent 100%)",
-          filter: "blur(4px)",
-          transform: "rotate(-5deg)",
-        }}
-      />
-      {/* Sao nhỏ dày đặc trong dải ngân hà */}
-      {milkyWayStars.map((s) => (
-        <span
-          key={`mw-${s.id}`}
-          className="pointer-events-none absolute rounded-full"
+      <motion.div style={{ x: milkyWayX, y: milkyWayY }} className="absolute inset-0 pointer-events-none">
+        {/* Lớp sương mờ dải ngân hà */}
+        <div
+          className="pointer-events-none absolute inset-0 milky-way-band"
+          style={{ opacity: 0.8 }}
+        />
+        {/* Dải ngân hà đậm ở trung tâm */}
+        <div
+          className="pointer-events-none absolute"
           style={{
-            top: `${s.top}%`,
-            left: `${s.left}%`,
-            width: s.size,
-            height: s.size,
-            opacity: 0.3 + ((s.id * 317) % 40) / 100,
-            background: "#d8e0ff",
-            animationName: "twinkle",
-            animationDuration: `${3 + s.delay}s`,
-            animationDelay: `${s.delay}s`,
-            animationTimingFunction: "ease-in-out",
-            animationIterationCount: "infinite",
+            top: "10%",
+            left: "-10%",
+            width: "120%",
+            height: "55%",
+            background:
+              "linear-gradient(125deg, transparent 0%, rgba(180,190,255,0.03) 15%, rgba(210,200,255,0.055) 30%, rgba(255,240,200,0.04) 45%, rgba(200,215,255,0.06) 60%, rgba(180,190,255,0.03) 75%, transparent 100%)",
+            filter: "blur(4px)",
+            transform: "rotate(-5deg)",
           }}
         />
-      ))}
+        {/* Sao nhỏ dày đặc trong dải ngân hà */}
+        {milkyWayStars.map((s) => (
+          <span
+            key={`mw-${s.id}`}
+            className="pointer-events-none absolute rounded-full"
+            style={{
+              top: `${s.top}%`,
+              left: `${s.left}%`,
+              width: s.size,
+              height: s.size,
+              opacity: 0.4 + ((s.id * 317) % 50) / 100,
+              background: ((s.id % 3) === 0) ? "#b8c9ff" : ((s.id % 5) === 0) ? "#fcd34d" : "#d8e0ff",
+              animationName: "twinkle",
+              animationDuration: `${3 + s.delay}s`,
+              animationDelay: `${s.delay}s`,
+              animationTimingFunction: "ease-in-out",
+              animationIterationCount: "infinite",
+            }}
+          />
+        ))}
+      </motion.div>
 
       {/* ===== NEBULA LAYERS ===== */}
-      {/* Nebula 1 — Top center (Blue-Violet, dense) */}
-      <div
-        className="pointer-events-none absolute -top-20 left-1/2 -translate-x-1/2 h-[500px] w-[140%] rounded-full blur-3xl animate-nebula-drift"
-        style={{
-          background:
-            "radial-gradient(ellipse at 50% 30%, rgba(124,158,255,0.12) 0%, rgba(58,46,92,0.18) 35%, rgba(11,16,38,0.08) 65%, transparent 80%)",
-        }}
-      />
-      {/* Nebula 2 — Bottom right (Deep purple) */}
-      <div
-        className="pointer-events-none absolute -bottom-32 -right-32 h-[500px] w-[500px] rounded-full blur-3xl"
-        style={{
-          background:
-            "radial-gradient(circle at 60% 60%, rgba(179,136,255,0.14) 0%, rgba(58,46,92,0.1) 45%, transparent 70%)",
-          animation: "nebula-drift 28s ease-in-out infinite reverse",
-          animationDelay: "-8s",
-        }}
-      />
-      {/* Nebula 3 — Top left (Gold tint) */}
-      <div
-        className="pointer-events-none absolute -top-16 -left-20 h-80 w-80 rounded-full blur-3xl"
-        style={{
-          background:
-            "radial-gradient(circle at 40% 40%, rgba(245,214,125,0.09) 0%, transparent 65%)",
-          animation: "nebula-drift 35s ease-in-out infinite",
-          animationDelay: "-14s",
-        }}
-      />
-      {/* Nebula 4 — Mid-screen (teal-violet deep) */}
-      <div
-        className="pointer-events-none absolute top-1/3 left-1/3 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
-        style={{
-          background:
-            "radial-gradient(circle, rgba(100,80,200,0.06) 0%, transparent 70%)",
-          animation: "nebula-drift 22s ease-in-out infinite",
-          animationDelay: "-5s",
-        }}
-      />
+      <motion.div style={{ x: nebulaX, y: nebulaY }} className="absolute inset-0 pointer-events-none">
+        {/* Nebula 1 — Top center (Deep Purple & Blue, dense) */}
+        <div
+          className="pointer-events-none absolute -top-20 left-1/2 -translate-x-1/2 h-[600px] w-[150%] rounded-full blur-[100px] animate-nebula-drift"
+          style={{
+            background:
+              "radial-gradient(ellipse at 50% 30%, rgba(138,43,226,0.15) 0%, rgba(75,0,130,0.2) 35%, rgba(11,16,38,0.1) 65%, transparent 80%)",
+          }}
+        />
+        {/* Nebula 2 — Bottom right (Mysterious Magenta/Pink) */}
+        <div
+          className="pointer-events-none absolute -bottom-32 -right-32 h-[600px] w-[600px] rounded-full blur-[90px]"
+          style={{
+            background:
+              "radial-gradient(circle at 60% 60%, rgba(255,0,255,0.08) 0%, rgba(75,0,130,0.12) 45%, transparent 70%)",
+            animation: "nebula-drift 30s ease-in-out infinite reverse",
+            animationDelay: "-8s",
+          }}
+        />
+        {/* Nebula 3 — Top left (Gold/Cyan tint for contrast) */}
+        <div
+          className="pointer-events-none absolute -top-16 -left-20 h-96 w-96 rounded-full blur-[80px]"
+          style={{
+            background:
+              "radial-gradient(circle at 40% 40%, rgba(0,255,255,0.06) 0%, rgba(245,214,125,0.05) 40%, transparent 70%)",
+            animation: "nebula-drift 40s ease-in-out infinite",
+            animationDelay: "-14s",
+          }}
+        />
+        {/* Nebula 4 — Mid-screen (Deep cosmic blue) */}
+        <div
+          className="pointer-events-none absolute top-1/3 left-1/3 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[100px]"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(0,100,255,0.07) 0%, rgba(50,0,150,0.05) 40%, transparent 75%)",
+            animation: "nebula-drift 25s ease-in-out infinite",
+            animationDelay: "-5s",
+          }}
+        />
+      </motion.div>
 
       {/* ===== AURORA BANDS ===== */}
       <div
-        className="pointer-events-none absolute -left-1/4 top-8 h-40 w-[150%] animate-drift-x rounded-full opacity-20 blur-3xl"
+        className="pointer-events-none absolute -left-1/4 top-1/4 h-64 w-[150%] animate-drift-x rounded-full opacity-30 blur-[90px]"
         style={{
           background:
-            "linear-gradient(90deg, transparent, #7C9EFF 25%, #5A3A8A 55%, #3A2E5C 75%, transparent)",
+            "linear-gradient(90deg, transparent, rgba(124,158,255,0.4) 25%, rgba(138,43,226,0.3) 55%, rgba(58,46,92,0.4) 75%, transparent)",
+          transform: "rotate(-15deg)",
         }}
       />
       <div
-        className="pointer-events-none absolute -right-1/4 -bottom-16 h-52 w-[160%] opacity-15 blur-3xl"
+        className="pointer-events-none absolute -right-1/4 bottom-1/4 h-80 w-[160%] opacity-25 blur-[100px]"
         style={{
           background:
-            "linear-gradient(90deg, transparent, #B388FF 35%, #3A2E5C 60%, #1e1333 80%, transparent)",
-          animation: "drift-x 120s ease-in-out infinite reverse",
+            "linear-gradient(90deg, transparent, rgba(255,0,255,0.2) 35%, rgba(75,0,130,0.3) 60%, rgba(30,19,51,0.5) 80%, transparent)",
+          animation: "drift-x 150s ease-in-out infinite reverse",
+          transform: "rotate(10deg)",
         }}
       />
 
       {/* ===== MAIN STAR FIELD (multi-color) ===== */}
-      {stars.map((s) => (
-        <span
-          key={s.id}
-          className="pointer-events-none absolute rounded-full"
-          style={{
-            top: `${s.top}%`,
-            left: `${s.left}%`,
-            width: s.isBright ? s.size * 1.8 : s.size,
-            height: s.isBright ? s.size * 1.8 : s.size,
-            opacity: s.opacity,
-            background: STAR_COLORS[s.colorClass],
-            animationName: "twinkle",
-            animationDuration: `${s.duration}s`,
-            animationDelay: `${s.delay}s`,
-            animationTimingFunction: "ease-in-out",
-            animationIterationCount: "infinite",
-            boxShadow: s.isBright
-              ? `0 0 ${s.size * 5}px ${s.size * 1.5}px ${STAR_COLORS[s.colorClass]}55`
-              : "none",
-          }}
-        />
-      ))}
+      <motion.div style={{ x: starFieldX, y: starFieldY }} className="absolute inset-0 pointer-events-none">
+        {stars.map((s) => (
+          <span
+            key={s.id}
+            className="pointer-events-none absolute rounded-full"
+            style={{
+              top: `${s.top}%`,
+              left: `${s.left}%`,
+              width: s.isBright ? s.size * 1.8 : s.size,
+              height: s.isBright ? s.size * 1.8 : s.size,
+              opacity: s.opacity,
+              background: STAR_COLORS[s.colorClass],
+              animationName: "twinkle",
+              animationDuration: `${s.duration}s`,
+              animationDelay: `${s.delay}s`,
+              animationTimingFunction: "ease-in-out",
+              animationIterationCount: "infinite",
+              boxShadow: s.isBright
+                ? `0 0 ${s.size * 5}px ${s.size * 1.5}px ${STAR_COLORS[s.colorClass]}55`
+                : "none",
+            }}
+          />
+        ))}
+      </motion.div>
 
       {/* ===== SHOOTING STARS ===== */}
-      {shootingStars.map((ss) => (
-        <span
-          key={ss.id}
-          className="pointer-events-none absolute"
-          style={{
-            top: `${ss.top}%`,
-            left: `${ss.left}%`,
-            width: ss.length,
-            height: 1.5,
-            transform: `rotate(${ss.angle}deg)`,
-            background: "linear-gradient(to left, #FFF9D0, #F5D67D88, transparent)",
-            animationName: "shooting-star",
-            animationDuration: `${ss.duration}s`,
-            animationDelay: `${ss.delay}s`,
-            animationTimingFunction: "ease-out",
-            animationIterationCount: "infinite",
-            opacity: 0,
-            borderRadius: 2,
-          }}
-        />
-      ))}
+      <motion.div style={{ x: shootingStarX, y: shootingStarY }} className="absolute inset-0 pointer-events-none">
+        {shootingStars.map((ss) => (
+          <span
+            key={ss.id}
+            className="pointer-events-none absolute"
+            style={{
+              top: `${ss.top}%`,
+              left: `${ss.left}%`,
+              width: ss.length,
+              height: 1.5,
+              transform: `rotate(${ss.angle}deg)`,
+              background: "linear-gradient(to left, #FFF9D0, #F5D67D88, transparent)",
+              animationName: "shooting-star",
+              animationDuration: `${ss.duration}s`,
+              animationDelay: `${ss.delay}s`,
+              animationTimingFunction: "ease-out",
+              animationIterationCount: "infinite",
+              opacity: 0,
+              borderRadius: 2,
+            }}
+          />
+        ))}
+      </motion.div>
 
       {/* ===== VIBE ATMOSPHERE TINT =====
           Changes color per Vibe via CSS variable --vibe-sky-tint

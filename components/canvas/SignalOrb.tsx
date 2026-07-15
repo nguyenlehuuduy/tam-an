@@ -148,7 +148,7 @@ export function SignalOrb({ signal, onTap, isEncouraged = false }: SignalOrbProp
 
   return (
     <div
-      className="absolute select-none"
+      className="absolute select-none pointer-events-auto"
       style={{
         top: `${signal.y}%`,
         left: `${signal.x}%`,
@@ -229,8 +229,8 @@ export function SignalOrb({ signal, onTap, isEncouraged = false }: SignalOrbProp
       <motion.div
         role="button"
         aria-label={isStar ? `Chạm để đọc ngôi sao${isEncouraged ? " (đã được khích lệ)" : ""}` : `Chạm để đọc bong bóng${isEncouraged ? " (đã được khích lệ)" : ""}`}
-        onClick={handleTap}
-        className="orb-btn absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full cursor-pointer"
+        onTap={() => handleTap()}
+        className="orb-btn absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full cursor-pointer pointer-events-auto"
         animate={orbAnimation}
         transition={{ duration: animDuration, repeat: Infinity, ease: "easeInOut" }}
         whileHover={{ scale: 1.2, transition: { duration: 0.2 } }}
@@ -280,6 +280,45 @@ export function SignalOrb({ signal, onTap, isEncouraged = false }: SignalOrbProp
           />
         )}
       </motion.div>
+
+      {/* === AMBIENT PARTICLES (glow effect when reacted/encouraged) === */}
+      {(tier === "encouraged" || signal.warmth === "many" || signal.warmth === "some") && (
+        <div className="absolute inset-0 pointer-events-none overflow-visible">
+          {Array.from({ length: 6 }).map((_, i) => {
+            const angle = (i * 360) / 6;
+            const delay = i * 0.4;
+            return (
+              <motion.div
+                key={i}
+                className="absolute w-1.5 h-1.5 rounded-full"
+                animate={{
+                  x: [0, Math.cos((angle * Math.PI) / 180) * (px * 0.65), Math.cos((angle * Math.PI) / 180) * (px * 0.9)],
+                  y: [0, Math.sin((angle * Math.PI) / 180) * (px * 0.65) - 8, Math.sin((angle * Math.PI) / 180) * (px * 0.9) - 20],
+                  scale: [0, 1.2, 0],
+                  opacity: [0, 0.9, 0],
+                }}
+                transition={{
+                  duration: 2.5,
+                  repeat: Infinity,
+                  delay: delay,
+                  ease: "easeOut",
+                }}
+                style={{
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  background: isStar
+                    ? "radial-gradient(circle, #FFFBE0 0%, #F5D67D 100%)"
+                    : "radial-gradient(circle, #E8FBFF 0%, #4FD1C5 100%)",
+                  boxShadow: isStar
+                    ? "0 0 6px #F5D67D"
+                    : "0 0 6px #4FD1C5",
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
 
       {/* === WARMTH COUNT BADGE (for many warmth) === */}
       {signal.warmth === "many" && (
