@@ -4,7 +4,86 @@
 
 :root {
   color-scheme: dark;
+
+  /* Default vibe accent (Ấm Áp / cozy) */
+  --vibe-accent: #E8A47A;
+  --vibe-glow: rgba(232, 164, 122, 0.35);
+  --vibe-glow-subtle: rgba(232, 164, 122, 0.12);
+  --vibe-sky-tint: rgba(160, 90, 40, 0.07);
+  --vibe-badge-border: rgba(232, 164, 122, 0.4);
 }
+
+/* ========================================
+   VIBE THEMES — thay đổi toàn bộ accent colors
+   Được trigger bởi data-vibe attribute trên <html>
+   ======================================== */
+
+/* 🕯️ Ấm Áp — Warm, golden orange. Like a late-night café. */
+[data-vibe="cozy"] {
+  --vibe-accent: #E8A47A;
+  --vibe-glow: rgba(232, 164, 122, 0.4);
+  --vibe-glow-subtle: rgba(232, 164, 122, 0.12);
+  --vibe-sky-tint: rgba(160, 90, 40, 0.07);
+  --vibe-badge-border: rgba(232, 164, 122, 0.45);
+}
+
+/* 🌙 Mơ Mộng — Lavender purple. Like moonlight and galaxies. */
+[data-vibe="dreamy"] {
+  --vibe-accent: #C084FC;
+  --vibe-glow: rgba(192, 132, 252, 0.45);
+  --vibe-glow-subtle: rgba(192, 132, 252, 0.14);
+  --vibe-sky-tint: rgba(100, 40, 180, 0.1);
+  --vibe-badge-border: rgba(192, 132, 252, 0.5);
+}
+
+/* ⚡ Công Nghệ — Neon cyan. Sharp and futuristic. */
+[data-vibe="cyber"] {
+  --vibe-accent: #22D3EE;
+  --vibe-glow: rgba(34, 211, 238, 0.4);
+  --vibe-glow-subtle: rgba(34, 211, 238, 0.12);
+  --vibe-sky-tint: rgba(0, 160, 190, 0.08);
+  --vibe-badge-border: rgba(34, 211, 238, 0.5);
+}
+
+/* 🎵 Hoài Niệm — Amber gold. Nostalgic and warm. */
+[data-vibe="lofi"] {
+  --vibe-accent: #FBBF24;
+  --vibe-glow: rgba(251, 191, 36, 0.4);
+  --vibe-glow-subtle: rgba(251, 191, 36, 0.12);
+  --vibe-sky-tint: rgba(180, 130, 10, 0.08);
+  --vibe-badge-border: rgba(251, 191, 36, 0.5);
+}
+
+/* Badge glow utility classes per vibe */
+.glow-cozy {
+  border-color: var(--vibe-badge-border);
+  box-shadow: 0 0 12px var(--vibe-glow-subtle);
+}
+.glow-dreamy {
+  border-color: var(--vibe-badge-border);
+  box-shadow: 0 0 12px var(--vibe-glow-subtle);
+}
+.glow-cyber {
+  border-color: var(--vibe-badge-border);
+  box-shadow: 0 0 12px var(--vibe-glow-subtle);
+}
+.glow-lofi {
+  border-color: var(--vibe-badge-border);
+  box-shadow: 0 0 12px var(--vibe-glow-subtle);
+}
+
+/* Vibe dot colors */
+.bg-vibe-cozy { background-color: #E8A47A; }
+.bg-vibe-dreamy { background-color: #C084FC; }
+.bg-vibe-cyber { background-color: #22D3EE; }
+.bg-vibe-lofi { background-color: #FBBF24; }
+
+/* Global vibe accent usage — buttons, glows, etc. */
+.vibe-accent-bg { background-color: var(--vibe-accent); }
+.vibe-accent-text { color: var(--vibe-accent); }
+.vibe-accent-border { border-color: var(--vibe-accent); }
+.vibe-glow { box-shadow: 0 0 20px var(--vibe-glow); }
+
 
 html,
 body {

@@ -252,6 +252,20 @@ export function SkyCanvas({ children, className }: SkyCanvasProps) {
         />
       ))}
 
+      {/* ===== VIBE ATMOSPHERE TINT =====
+          Changes color per Vibe via CSS variable --vibe-sky-tint
+          Set by VibeSync on <html data-vibe="...">
+      */}
+      <div
+        className="pointer-events-none absolute inset-0 transition-all duration-[1200ms] ease-in-out"
+        style={{ background: "radial-gradient(ellipse at 50% 40%, var(--vibe-sky-tint) 0%, transparent 70%)" }}
+      />
+      {/* Second tint layer — bottom glow */}
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 transition-all duration-[1200ms] ease-in-out"
+        style={{ background: "linear-gradient(0deg, var(--vibe-sky-tint) 0%, transparent 100%)" }}
+      />
+
       <div className="relative z-10">{children}</div>
     </div>
   );
