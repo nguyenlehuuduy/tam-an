@@ -14,6 +14,28 @@ interface SignalCardProps {
 
 const MAX_MSG = 120;
 
+const SKY_SUGGESTIONS = [
+  "Tớ luôn ở đây lắng nghe cậu. ✨",
+  "Cậu đã làm rất tốt rồi, đừng quá gồng mình nhé. 🫂",
+  "Mọi giông bão rồi sẽ qua, ngày mai tớ vẫn ở đây. 🌙",
+  "Cảm ơn cậu đã dũng cảm chia sẻ điều này. ✦",
+  "Chậm lại một chút cũng không sao đâu cậu. ☕",
+  "Cầu mong tối nay cậu sẽ có một giấc ngủ bình yên. 💤",
+  "Bạn xứng đáng được trân trọng và lắng nghe. ❤️",
+  "Những mệt mỏi này rồi sẽ hóa thành sức mạnh thôi. ⭐",
+];
+
+const OCEAN_SUGGESTIONS = [
+  "Hãy cứ để mọi muộn phiền trôi đi theo dòng nước. 🌊",
+  "Hôm nay vất vả rồi, nghỉ tay uống một cốc nước ấm nhé. 🍵",
+  "Biển cả giữ bí mật cho cậu, cậu không cô đơn đâu. 🫂",
+  "Mọi chuyện rồi sẽ nhẹ nhõm hơn vào ngày mai thôi. 🫧",
+  "Hãy dịu dàng với chính mình hơn một chút cậu nhé. 💙",
+  "Tớ tin cậu sẽ vượt qua được bến bờ này. ⛵",
+  "Không sao đâu, khóc một chút rồi mai ta lại mỉm cười. 🐬",
+  "Lời tâm sự của cậu đã được đại dương ôm trọn rồi. 🐚",
+];
+
 export function SignalCard({ signal }: SignalCardProps) {
   const { reactedSignalIds, sendReaction, soundEnabled } = useAppState();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -159,12 +181,12 @@ export function SignalCard({ signal }: SignalCardProps) {
               </motion.div>
               <div>
                 <p className="text-sm font-bold text-base-text-primary">
-                  {message.trim() ? "Lời động viên của bạn đã bay đi ✨" : "Tia sáng đã được gửi đi ✨"}
+                  {message.trim() ? "Lời động viên của bạn đã bay đi ✨" : "Tia sáng của bạn đã chạm tới họ ✨"}
                 </p>
                 <p className="mt-1 text-xs text-base-text-secondary leading-relaxed">
                   {message.trim()
-                    ? `"${message.trim()}" — năng lượng ấm áp của bạn đã chạm đến họ rồi.`
-                    : "Dù họ không biết bạn là ai — điều bạn gửi đi đã làm ngôi sao này sáng hơn một chút."}
+                    ? `Năng lượng ấm áp của bạn đã truyền đến họ. ${isStar ? "Ngôi sao này" : "Bong bóng này"} giờ đây đã sáng rực rỡ và to lớn hơn rất nhiều!`
+                    : `Dù không nói thành lời, sự quan tâm của bạn đã làm ${isStar ? "ngôi sao này" : "bong bóng này"} bừng sáng lấp lánh hơn hẳn!`}
                 </p>
               </div>
             </motion.div>
@@ -186,19 +208,19 @@ export function SignalCard({ signal }: SignalCardProps) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.35 }}
-              className="flex flex-col gap-4"
+              className="flex flex-col gap-4.5"
             >
               {/* Chosen reaction indicator */}
               <div
                 className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm"
                 style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.08)",
                 }}
               >
-                <Sparkles size={14} className="text-warm shrink-0" />
-                <span className="text-base-text-secondary text-xs">
-                  Đã chọn phản hồi — thêm lời động viên tặng riêng cho họ không?
+                <Sparkles size={13} className="text-warm shrink-0" />
+                <span className="text-base-text-secondary text-[11px]">
+                  Đã nhận diện cảm xúc — đính kèm thêm lời nhắn gửi để làm họ vui lên nhé?
                 </span>
               </div>
 
@@ -209,13 +231,13 @@ export function SignalCard({ signal }: SignalCardProps) {
                   onChange={(e) => setMessage(e.target.value.slice(0, MAX_MSG))}
                   placeholder={msgPlaceholder}
                   rows={3}
-                  className="w-full resize-none rounded-2xl border bg-base-surface/50 px-4 py-3 text-sm leading-relaxed text-base-text-primary placeholder:text-base-text-secondary/40 focus:outline-none transition-all"
+                  className="w-full resize-none rounded-2xl border bg-base-surface/60 px-4 py-3 text-sm leading-relaxed text-base-text-primary placeholder:text-base-text-secondary/40 focus:outline-none transition-all duration-300"
                   style={{
                     borderColor: message.trim()
-                      ? `${accentColor}66`
+                      ? `${accentColor}aa`
                       : "rgba(255,255,255,0.1)",
                     boxShadow: message.trim()
-                      ? `0 0 12px 2px ${accentGlow}`
+                      ? `0 0 16px 3px ${accentGlow}`
                       : "none",
                   }}
                   autoFocus
@@ -223,7 +245,7 @@ export function SignalCard({ signal }: SignalCardProps) {
                 <div
                   className={`absolute bottom-2.5 right-3 text-[10px] font-mono ${
                     MAX_MSG - message.length < 20
-                      ? "text-caution"
+                      ? "text-critical font-bold"
                       : "text-base-text-secondary/40"
                   }`}
                 >
@@ -231,8 +253,32 @@ export function SignalCard({ signal }: SignalCardProps) {
                 </div>
               </div>
 
+              {/* Suggestions Container */}
+              <div className="flex flex-col gap-2">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-base-text-secondary/55 flex items-center gap-1.5 select-none">
+                  <span>✨ Lời vỗ về tâm hồn gợi ý:</span>
+                </p>
+                <div className="flex flex-wrap gap-1.5 max-h-[110px] overflow-y-auto pr-1">
+                  {(isStar ? SKY_SUGGESTIONS : OCEAN_SUGGESTIONS).map((s, idx) => (
+                    <motion.button
+                      key={idx}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setMessage(s)}
+                      className="text-left text-[11px] px-3 py-1.5 rounded-xl border border-white/5 bg-white/[0.02] text-base-text-secondary hover:text-base-text-primary hover:bg-white/[0.06] hover:border-white/10 transition-all select-none"
+                      style={{
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
+                        minHeight: 0,
+                      }}
+                    >
+                      {s}
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+
               {/* Action buttons */}
-              <div className="flex gap-2.5">
+              <div className="flex gap-2.5 mt-1">
                 <button
                   onClick={handleSkipMessage}
                   className="orb-btn flex-1 rounded-full border border-base-divider py-2.5 text-xs text-base-text-secondary hover:bg-white/5 hover:text-base-text-primary transition-colors"

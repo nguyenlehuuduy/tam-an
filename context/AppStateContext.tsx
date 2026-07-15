@@ -128,6 +128,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [moodHistory, setMoodHistory] = useState<MoodHistoryEntry[]>([]);
   const [draft, setDraft] = useState<DraftState>({ content: "", type: null });
   const [lastReleasedSignal, setLastReleasedSignal] = useState<Signal | null>(null);
+  const [allSignals, setAllSignals] = useState<Signal[]>([]);
 
   // Hydrate from localStorage once, client-side only.
   useEffect(() => {
@@ -138,6 +139,19 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setReactedSignalIds(persisted.reactedSignalIds);
     setEncouragedSignalIds(persisted.encouragedSignalIds || []);
     setMoodHistory(persisted.moodHistory);
+    
+    if (typeof window !== "undefined") {
+      try {
+        const raw = window.localStorage.getItem("tram-phat-sang:all-signals");
+        if (raw) {
+          setAllSignals(JSON.parse(raw));
+        } else {
+          setAllSignals([...persisted.userSignals, ...MOCK_SKY_SIGNALS, ...MOCK_OCEAN_SIGNALS]);
+        }
+      } catch {
+        setAllSignals([...persisted.userSignals, ...MOCK_SKY_SIGNALS, ...MOCK_OCEAN_SIGNALS]);
+      }
+    }
     setHydrated(true);
   }, []);
 
@@ -154,10 +168,11 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     };
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+      window.localStorage.setItem("tram-phat-sang:all-signals", JSON.stringify(allSignals));
     } catch {
       // storage full or unavailable
     }
-  }, [identity, soundEnabled, userSignals, reactedSignalIds, encouragedSignalIds, moodHistory, hydrated]);
+  }, [identity, soundEnabled, userSignals, reactedSignalIds, encouragedSignalIds, moodHistory, allSignals, hydrated]);
 
   const regenerateIdentity = useCallback(() => {
     setIdentity(generateIdentity());
@@ -198,6 +213,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
     // Lưu vào lịch sử tín hiệu của user
     setUserSignals((prev) => [signal, ...prev]);
+    setAllSignals((prev) => [signal, ...prev]);
     setLastReleasedSignal(signal);
 
     // Đồng thời lưu mood hiện tại vào lịch sử mood trend
@@ -222,6 +238,19 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         prev.includes(signalId) ? prev : [...prev, signalId]
       );
     }
+    
+    // Nâng cấp độ ấm áp của tín hiệu
+    setAllSignals((prev) =>
+      prev.map((s) => {
+        if (s.id === signalId) {
+          let newWarmth = s.warmth;
+          if (s.warmth === "few") newWarmth = "some";
+          else if (s.warmth === "some") newWarmth = "many";
+          return { ...s, warmth: newWarmth };
+        }
+        return s;
+      })
+    );
   }, []);
 
   const toggleSound = useCallback(() => {
@@ -229,13 +258,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signals = useMemo(() => {
-    const all = [
-      ...userSignals,
-      ...MOCK_SKY_SIGNALS,
-      ...MOCK_OCEAN_SIGNALS,
-    ];
-    return all.filter((s) => s.status === "visible");
-  }, [userSignals]);
+    return allSignals.filter((s) => s.status === "visible");
+  }, [allSignals]);
 
   const value: AppStateValue = {
     identity,
