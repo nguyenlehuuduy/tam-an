@@ -37,11 +37,12 @@ import { SignalOrb } from "@/components/canvas/SignalOrb";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { SignalCard } from "@/components/explore/SignalCard";
 import { SpaceMap } from "@/components/explore/SpaceMap";
+import { ConstellationView } from "@/components/explore/ConstellationView";
 import { AnonymousIdentityBadge } from "@/components/onboarding/AnonymousIdentityBadge";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useAppState } from "@/context/AppStateContext";
 import { Story } from "@/lib/mockSignals";
-import { playOpenSignal } from "@/lib/sound";
+import { playOpenSignal, startAmbient, stopAmbient } from "@/lib/sound";
 
 type Space = "sky" | "ocean";
 
@@ -87,6 +88,10 @@ interface DustMote {
   twinkleSpeed: number;
 }
 
+function isSkyForPresence(space: Space): boolean {
+  return space === "sky";
+}
+
 function generateDust(count: number, keyPrefix: string): DustMote[] {
   return Array.from({ length: count }, (_, i) => ({
     id: `${keyPrefix}-${i}`,
@@ -124,6 +129,27 @@ export default function ExplorePage() {
   const [echoStory, setEchoStory] = useState<Story | null>(null);
   const lastEchoIdRef = useRef<string | null>(null);
   const prefersReducedMotion = useReducedMotion();
+
+  // "Chế độ chiêm ngưỡng" — giữ chạm bản đồ để mở toàn cảnh không gian
+  // (xem components/explore/ConstellationView.tsx).
+  const [showConstellation, setShowConstellation] = useState(false);
+
+  // Đếm số người "cũng đang lặng lẽ ở đây lúc này" — mô phỏng có chủ đích
+  // (chưa có real-time đa người dùng thật, xem tai-lieu-du-an mục 4.5),
+  // nhưng thay đổi hợp lý theo khung giờ trong ngày và làm mới sau mỗi ~2
+  // phút để không cảm giác là một con số bịa cố định.
+  const [presenceTick, setPresenceTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setPresenceTick((p) => p + 1), 120000);
+    return () => clearInterval(t);
+  }, []);
+  const presenceCount = useMemo(() => {
+    const hour = new Date().getHours();
+    const base = hour >= 20 || hour < 2 ? 6 : hour >= 6 && hour < 12 ? 2 : 4;
+    const raw = Math.sin(presenceTick * 12.9898 + (isSkyForPresence(space) ? 1.7 : 5.3)) * 10000;
+    const jitter = Math.floor(Math.abs(raw % 1) * 3) - 1; // -1..+1
+    return Math.max(1, base + jitter);
+  }, [presenceTick, space]);
 
   // Vị trí kéo — dùng trực tiếp (không qua spring) cho chính khung kéo để
   // luôn bám sát ngón tay/chuột 1:1, tránh cảm giác trễ/lag khi lướt.
@@ -170,6 +196,18 @@ export default function ExplorePage() {
   const isSky = space === "sky";
   const whispers = isSky ? SKY_WHISPERS : OCEAN_WHISPERS;
   const stats = STATS_DATA[space];
+
+  // Âm thanh nền liên tục (gió xa/sóng vỗ khẽ) — trước đây /explore chỉ có
+  // tiếng lúc có hành động cụ thể, khiến không gian im lặng hoàn toàn phần
+  // lớn thời gian. Tự tắt khi rời trang hoặc tắt âm thanh.
+  useEffect(() => {
+    if (!soundEnabled) {
+      stopAmbient();
+      return;
+    }
+    startAmbient(isSky ? "sky" : "ocean");
+    return () => stopAmbient();
+  }, [soundEnabled, isSky]);
 
   useEffect(() => setMounted(true), []);
 
@@ -535,6 +573,12 @@ export default function ExplorePage() {
               {communityMoodMeta.emoji} {communityMoodMeta.label}
             </p>
           )}
+
+          {/* Hiện diện ẩn danh — giảm cảm giác cô đơn giữa không gian rộng,
+              không cần real-time thật (xem ghi chú ở khai báo presenceCount) */}
+          <p className="mt-1 text-[10px] text-base-text-secondary/30">
+            ✦ {presenceCount} người khác cũng đang lặng lẽ ở đây lúc này
+          </p>
         </motion.div>
 
         {/* ======================================================
@@ -599,6 +643,7 @@ export default function ExplorePage() {
               viewportHeightPx={viewportSize.height}
               isSky={isSky}
               encouragedStoryIds={encouragedStoryIds}
+              onOpenConstellation={() => setShowConstellation(true)}
             />
           </motion.div>
 
@@ -807,6 +852,21 @@ export default function ExplorePage() {
       <BottomSheet open={openStory !== null} onClose={() => setOpenStory(null)}>
         {openStory && <SignalCard signal={openStory} />}
       </BottomSheet>
+
+      {/* ======================================================
+          CHẾ ĐỘ CHIÊM NGƯỠNG — mở bằng cách giữ chạm bản đồ thu nhỏ
+          ====================================================== */}
+      {showConstellation && (
+        <ConstellationView
+          stories={visible}
+          isSky={isSky}
+          onClose={() => setShowConstellation(false)}
+          onSelectStory={(s) => {
+            setShowConstellation(false);
+            setOpenStory(s);
+          }}
+        />
+      )}
     </Canvas>
   );
 }

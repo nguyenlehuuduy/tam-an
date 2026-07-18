@@ -195,7 +195,7 @@ export default function AuthPage() {
                 transition={{ delay: 0.2 }}
                 className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-base-text-secondary/60"
               >
-                Trạm Phát Sáng
+                Solace
               </motion.p>
 
               <motion.h1

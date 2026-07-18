@@ -62,7 +62,7 @@ interface NotificationContextValue {
   hydrated: boolean;
 }
 
-const STORAGE_KEY = "tram-phat-sang:notifications";
+const STORAGE_KEY = "solace:notifications";
 
 export const ALL_NOTIFICATION_TYPES: NotificationType[] = [
   "reaction",
@@ -127,7 +127,7 @@ function seedNotifications(): AppNotification[] {
     {
       id: "seed-5",
       type: "product-update",
-      title: "Trạm Phát Sáng vừa có bản cập nhật mới",
+      title: "Solace vừa có bản cập nhật mới",
       body: "Thư viện kiến thức và Dashboard cá nhân vừa ra mắt — khám phá ngay.",
       timestamp: now - 6 * DAY,
       read: true,

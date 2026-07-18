@@ -1,5 +1,5 @@
 -- =====================================================================
--- Trạm Phát Sáng — Supabase schema (SCAFFOLDING cho Giai đoạn 2)
+-- Solace — Supabase schema (SCAFFOLDING cho Giai đoạn 2)
 -- =====================================================================
 -- File này CHƯA được kết nối vào ứng dụng — ứng dụng hiện tại vẫn chạy
 -- hoàn toàn trên localStorage (xem tai-lieu-du-an mục 4.5). Đây là bước

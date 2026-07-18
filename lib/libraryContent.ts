@@ -93,7 +93,7 @@ export const LIBRARY_ARTICLES: LibraryArticle[] = [
     tags: ["căng thẳng", "mẹo nhanh"],
     moodTags: ["stress", "anxiety"],
     readingTimeMinutes: 3,
-    author: { name: "Đội ngũ Trạm Phát Sáng", credentials: "Biên tập nội dung sức khoẻ tinh thần" },
+    author: { name: "Đội ngũ Solace", credentials: "Biên tập nội dung sức khoẻ tinh thần" },
     coverGradient: "linear-gradient(135deg, #072034 0%, #0E4D5C 60%, #4FD1C5 140%)",
     coverEmoji: "⚡",
     vi: {
@@ -153,7 +153,7 @@ export const LIBRARY_ARTICLES: LibraryArticle[] = [
       body: [
         "Cô đơn không phải lúc nào cũng đến từ việc thiếu người xung quanh. Nhiều người vẫn cảm thấy lạc lõng ngay giữa một nhóm bạn ồn ào — vì cô đơn thực chất là cảm giác thiếu kết nối có ý nghĩa, không phải thiếu số lượng tương tác.",
         "Nghiên cứu tâm lý học xã hội chỉ ra rằng việc chia sẻ một cảm xúc thật — dù ẩn danh, dù chỉ với một người lạ — vẫn có thể giảm đáng kể cảm giác cô đơn, vì não bộ ghi nhận đó là một kết nối thật.",
-        "Đó cũng là lý do những không gian ẩn danh như Trạm Phát Sáng có giá trị: bạn không cần phải \"diễn\" để được chấp nhận, và điều đó tự nó đã là một hình thức kết nối chân thật.",
+        "Đó cũng là lý do những không gian ẩn danh như Solace có giá trị: bạn không cần phải \"diễn\" để được chấp nhận, và điều đó tự nó đã là một hình thức kết nối chân thật.",
         "Nếu cảm giác lạc lõng kéo dài và đi kèm mất hứng thú với mọi thứ, đó có thể là dấu hiệu cần thêm sự hỗ trợ chuyên môn — không phải điều gì phải giấu diếm hay xấu hổ.",
       ],
     },
@@ -164,7 +164,7 @@ export const LIBRARY_ARTICLES: LibraryArticle[] = [
     tags: ["biết ơn", "thói quen", "nhật ký"],
     moodTags: ["gratitude", "self-care"],
     readingTimeMinutes: 3,
-    author: { name: "Đội ngũ Trạm Phát Sáng", credentials: "Biên tập nội dung sức khoẻ tinh thần" },
+    author: { name: "Đội ngũ Solace", credentials: "Biên tập nội dung sức khoẻ tinh thần" },
     coverGradient: "linear-gradient(135deg, #3B1F0E 0%, #6B3F1F 60%, #F5D67D 140%)",
     coverEmoji: "🌸",
     vi: {
@@ -173,7 +173,7 @@ export const LIBRARY_ARTICLES: LibraryArticle[] = [
       body: [
         "Mỗi tối trước khi ngủ, viết ra đúng 3 điều — dù nhỏ đến đâu — khiến bạn thấy dễ chịu trong ngày hôm đó. Có thể chỉ là một tách trà ấm, một tin nhắn từ bạn cũ, hay việc bạn đã hoàn thành một việc khó.",
         "Việc này không phủ nhận những khó khăn bạn đang trải qua — nó chỉ giúp não bộ luyện tập việc nhận ra những điều tốt vẫn tồn tại song song, thay vì chỉ tập trung vào phần nặng nề.",
-        "Bạn có thể dùng chính trang /write của Trạm Phát Sáng cho việc này — không nhất thiết phải thả lên bầu trời hay đại dương, chỉ cần viết ra cho chính mình cũng đã có giá trị rồi.",
+        "Bạn có thể dùng chính trang /write của Solace cho việc này — không nhất thiết phải thả lên bầu trời hay đại dương, chỉ cần viết ra cho chính mình cũng đã có giá trị rồi.",
       ],
     },
   },
@@ -227,7 +227,7 @@ export const LIBRARY_ARTICLES: LibraryArticle[] = [
     coverEmoji: "🌱",
     vi: {
       title: "Mình đã vượt qua kỳ thi tồi tệ nhất như thế nào",
-      excerpt: "Một chia sẻ được tuyển chọn từ cộng đồng Trạm Phát Sáng — không phải nội dung tự do đăng tải, mà đã qua biên tập kỹ.",
+      excerpt: "Một chia sẻ được tuyển chọn từ cộng đồng Solace — không phải nội dung tự do đăng tải, mà đã qua biên tập kỹ.",
       body: [
         "Mình từng nghĩ một kỳ thi trượt sẽ là dấu chấm hết. Nhưng nhìn lại, điều thực sự giúp mình vượt qua không phải là \"cố gắng hơn\" mà là cho phép bản thân buồn trong vài ngày trước khi đứng dậy.",
         "Mình bắt đầu viết ra cảm xúc mỗi tối — không phải để giải quyết vấn đề, chỉ để không phải mang nó một mình suốt cả ngày.",
@@ -260,7 +260,7 @@ export const LIBRARY_ARTICLES: LibraryArticle[] = [
     tags: ["phỏng vấn", "lo âu xã hội"],
     moodTags: ["anxiety", "stress"],
     readingTimeMinutes: 3,
-    author: { name: "Đội ngũ Trạm Phát Sáng", credentials: "Biên tập nội dung sức khoẻ tinh thần" },
+    author: { name: "Đội ngũ Solace", credentials: "Biên tập nội dung sức khoẻ tinh thần" },
     coverGradient: "linear-gradient(135deg, #1A0533 0%, #072034 60%, #22D3EE 140%)",
     coverEmoji: "💡",
     vi: {

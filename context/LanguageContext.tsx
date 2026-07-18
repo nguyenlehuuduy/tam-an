@@ -3,7 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Language, translate } from "@/lib/i18n";
 
-const LANG_KEY = "tram-phat-sang:lang";
+const LANG_KEY = "solace:lang";
 
 interface LanguageContextValue {
   language: Language;

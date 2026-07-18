@@ -28,7 +28,7 @@ import { moderateContent } from "@/lib/moderation";
 import { useAuth } from "@/context/AuthContext";
 import { fetchVisibleStories, insertReaction, insertStory } from "@/lib/storiesApi";
 
-const STORAGE_KEY = "tram-phat-sang:v2"; // Đổi key để tránh xung đột dữ liệu cũ
+const STORAGE_KEY = "solace:v2"; // Đổi key để tránh xung đột dữ liệu cũ
 
 export interface MoodHistoryEntry {
   timestamp: number;
@@ -275,7 +275,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
     if (typeof window !== "undefined") {
       try {
-        const raw = window.localStorage.getItem("tram-phat-sang:all-signals");
+        const raw = window.localStorage.getItem("solace:all-signals");
         if (raw) {
           const parsedAll = JSON.parse(raw) as Record<string, unknown>[];
           setAllStories(parsedAll.map(migrateStory));
@@ -327,7 +327,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     };
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-      window.localStorage.setItem("tram-phat-sang:all-signals", JSON.stringify(allStories));
+      window.localStorage.setItem("solace:all-signals", JSON.stringify(allStories));
     } catch {
       // storage full or unavailable
     }

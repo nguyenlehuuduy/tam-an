@@ -13,6 +13,16 @@ interface SignalOrbProps {
 // Kích thước cơ bản — lớn hơn nhiều để rõ ràng hơn
 const BASE_SIZE: Record<Story["size"], number> = { sm: 32, md: 48, lg: 66 };
 
+/** Jitter nhỏ cho nhịp "thở" của từng orb, suy ra từ chính id câu chuyện
+ * (ổn định, không đổi giữa các lần render) — để các orb cùng tier không
+ * thở đồng loạt y hệt nhau theo thời gian (cảm giác máy móc), mà lệch pha
+ * tự nhiên như những sinh vật sống riêng biệt. */
+function breathJitter(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 1000;
+  return (h % 1000) / 1000; // 0..1
+}
+
 // Warmth multiplier cho kích thước
 const WARMTH_SCALE: Record<Story["warmth"], number> = {
   few: 1,
@@ -144,7 +154,9 @@ export function SignalOrb({ signal, onTap, isEncouraged = false }: SignalOrbProp
         scale: [1, 1.04, 1],
       };
 
-  const animDuration = vis.animDuration;
+  // Lệch nhẹ chu kỳ thở theo từng câu chuyện (±0.9s) để cả không gian
+  // không thở "đồng bộ máy móc" — mỗi orb như một sinh mệnh riêng.
+  const animDuration = vis.animDuration + (breathJitter(signal.id) - 0.5) * 1.8;
 
   return (
     <div

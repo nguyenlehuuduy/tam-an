@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircleHeart, X } from "lucide-react";
 import { useAppState } from "@/context/AppStateContext";
 
-const DISMISSED_KEY = "tram-phat-sang:feedback-nudge-dismissed";
+const DISMISSED_KEY = "solace:feedback-nudge-dismissed";
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 type MilestoneId = "first-story" | "seven-days";

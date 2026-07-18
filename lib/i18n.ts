@@ -135,12 +135,12 @@ export const VI = {
     language: { title: "Ngôn ngữ" },
     sound: { title: "Âm thanh" },
     vibe: { title: "Vibe / Giao diện cảm xúc" },
-    feedback: { title: "Góp ý", cta: "Gửi góp ý cho Trạm" },
+    feedback: { title: "Góp ý", cta: "Gửi góp ý cho Solace" },
     about: {
-      title: "Về Trạm Phát Sáng",
+      title: "Về Solace",
       mission: "Sứ mệnh",
       missionText:
-        "Trạm Phát Sáng là không gian ẩn danh để mọi người viết ra điều đang nặng lòng, và nhận lại sự đồng cảm ấm áp từ cộng đồng — không phán xét, không cần danh tính.",
+        "Solace là không gian ẩn danh để mọi người viết ra điều đang nặng lòng, và nhận lại sự đồng cảm ấm áp từ cộng đồng — không phán xét, không cần danh tính.",
       privacy: "Chính sách riêng tư",
       terms: "Điều khoản sử dụng",
       hotline: "Đường dây hỗ trợ",
@@ -273,12 +273,12 @@ export const EN: DeepPartial<typeof VI> = {
     language: { title: "Language" },
     sound: { title: "Sound" },
     vibe: { title: "Vibe / Emotional theme" },
-    feedback: { title: "Feedback", cta: "Send feedback to Trạm" },
+    feedback: { title: "Feedback", cta: "Send feedback to Solace" },
     about: {
-      title: "About Trạm Phát Sáng",
+      title: "About Solace",
       mission: "Mission",
       missionText:
-        "Trạm Phát Sáng is an anonymous space to write down what's weighing on your heart, and receive warm empathy from the community — no judgment, no identity required.",
+        "Solace is an anonymous space to write down what's weighing on your heart, and receive warm empathy from the community — no judgment, no identity required.",
       privacy: "Privacy policy",
       terms: "Terms of use",
       hotline: "Support hotline",

@@ -9,7 +9,7 @@ import React, {
   useState,
 } from "react";
 
-const AUTH_STORAGE_KEY = "tram-phat-sang:auth";
+const AUTH_STORAGE_KEY = "solace:auth";
 
 // =====================================================
 // TYPES
