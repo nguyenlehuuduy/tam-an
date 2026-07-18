@@ -3,24 +3,27 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useAppState } from "@/context/AppStateContext";
 
 /**
  * Root page — redirect logic:
- * - Chưa đăng nhập → /auth (mời tạo tài khoản)
- * - Đã đăng nhập → /checkin (vào app luôn)
+ * - Chưa đăng nhập → /auth (mời tạo tài khoản, hoặc bỏ qua để dùng Guest)
+ * - Đã đăng nhập nhưng chưa tuỳ chỉnh hồ sơ → /profile-setup (Module 1.2)
+ * - Đã đăng nhập và đã xong hồ sơ → /checkin (vào app luôn)
  */
 export default function RootPage() {
   const router = useRouter();
-  const { isAuthenticated, hydrated } = useAuth();
+  const { isAuthenticated, hydrated: authHydrated } = useAuth();
+  const { profileSetupComplete, hydrated: appHydrated } = useAppState();
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!authHydrated || !appHydrated) return;
     if (isAuthenticated) {
-      router.replace("/checkin");
+      router.replace(profileSetupComplete ? "/checkin" : "/profile-setup");
     } else {
       router.replace("/auth");
     }
-  }, [hydrated, isAuthenticated, router]);
+  }, [authHydrated, appHydrated, isAuthenticated, profileSetupComplete, router]);
 
   // Loading skeleton while hydrating
   return (

@@ -43,12 +43,47 @@ const STORY_GLIMPSES = [
 const LIVE_COUNT_BASE = 247;
 type Phase = "intro" | "mood";
 
+// =====================================================
+// Lời chào theo thời điểm trong ngày — thay cho eyebrow tĩnh "một không
+// gian để", để trang có cảm giác "biết bạn đang ở đây lúc này" thay vì
+// một màn hình vô cảm hiển thị giống nhau mọi lúc.
+// =====================================================
+function getTimeGreeting(hour: number): string {
+  if (hour >= 0 && hour < 5) return "Đêm khuya rồi, một không gian để";
+  if (hour < 11) return "Chào buổi sáng, một không gian để";
+  if (hour < 14) return "Giữa trưa, một khoảng lặng để";
+  if (hour < 18) return "Chiều nay, một không gian để";
+  if (hour < 22) return "Buổi tối rồi, một không gian để";
+  return "Đêm khuya rồi, một không gian để";
+}
+
+// Lời hồi đáp đồng cảm ngay sau khi chọn mood — chạm đúng vào cảm xúc thay
+// vì chỉ im lặng chuyển sang bước tiếp theo.
+function moodAcknowledgment(value: number): string {
+  switch (value) {
+    case 2:
+      return "Cảm ơn vì đã thành thật, kể cả khi mọi thứ đang rất nặng.";
+    case 4:
+      return "Không sao cả. Không phải lúc nào cũng cần ổn.";
+    case 6:
+      return "Vậy cũng tốt rồi — cứ để cảm xúc là chính nó.";
+    case 8:
+      return "Vui vì hôm nay bạn thấy nhẹ hơn một chút.";
+    case 10:
+      return "Cảm giác nhẹ bổng này, giữ lấy nó nhé.";
+    default:
+      return "Cảm ơn vì đã chia sẻ cảm xúc thật của mình.";
+  }
+}
+
 export default function CheckinPage() {
   const router = useRouter();
   const { mood, setMood } = useAppState();
   const [liveCount, setLiveCount] = useState(LIVE_COUNT_BASE);
   const [phase, setPhase] = useState<Phase>("intro");
   const [mounted, setMounted] = useState(false);
+  const [greeting, setGreeting] = useState("một không gian để");
+  const [glimpseIdx, setGlimpseIdx] = useState(0);
 
   // Mouse parallax cho hero
   const mouseX = useMotionValue(0);
@@ -58,7 +93,10 @@ export default function CheckinPage() {
   const parallaxX = useTransform(springX, [-0.5, 0.5], [-12, 12]);
   const parallaxY = useTransform(springY, [-0.5, 0.5], [-8, 8]);
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    setGreeting(getTimeGreeting(new Date().getHours()));
+  }, []);
 
   // Live count fluctuation — chỉ client side
   useEffect(() => {
@@ -68,6 +106,16 @@ export default function CheckinPage() {
         return Math.max(238, Math.min(268, prev + delta));
       });
     }, 3200);
+    return () => clearInterval(id);
+  }, []);
+
+  // Vòng lặp mảnh tâm sự cho dải mobile (xem thêm khối "MOBILE GLIMPSE
+  // TICKER" bên dưới) — trên desktop các mảnh này đã hiển thị đồng thời
+  // dạng thẻ nổi nên không cần vòng lặp.
+  useEffect(() => {
+    const id = setInterval(() => {
+      setGlimpseIdx((p) => (p + 1) % STORY_GLIMPSES.length);
+    }, 3400);
     return () => clearInterval(id);
   }, []);
 
@@ -135,6 +183,28 @@ export default function CheckinPage() {
                 </motion.div>
               ))}
 
+              {/* ── Mobile Glimpse Ticker — thay thế cho các thẻ nổi vốn
+                  chỉ hiện trên desktop (hidden lg:block), để mảnh tâm sự
+                  của người khác cũng "chạm" tới người dùng mobile ── */}
+              {mounted && (
+                <div className="relative z-10 mb-5 block w-full max-w-[300px] px-2 lg:hidden">
+                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 backdrop-blur-sm">
+                    <AnimatePresence mode="wait">
+                      <motion.p
+                        key={glimpseIdx}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.35 }}
+                        className="text-center text-[11px] italic leading-relaxed text-white/50"
+                      >
+                        "{STORY_GLIMPSES[glimpseIdx].text}"
+                      </motion.p>
+                    </AnimatePresence>
+                  </div>
+                </div>
+              )}
+
               {/* ── Center Hero Content ── */}
               <motion.div
                 className="relative z-10 flex max-w-[520px] flex-col items-center text-center"
@@ -175,7 +245,7 @@ export default function CheckinPage() {
                     transition={{ delay: 0.3, duration: 0.5 }}
                     className="mb-2 text-xs font-semibold uppercase tracking-[0.3em] text-base-text-secondary/60"
                   >
-                    một không gian để
+                    {greeting}
                   </motion.p>
 
                   <motion.h1
@@ -326,6 +396,24 @@ export default function CheckinPage() {
                 >
                   <MoodSlider value={mood} onChange={setMood} />
                 </motion.div>
+
+                {/* Hồi đáp đồng cảm — xuất hiện ngay khi chọn mood, để
+                    người dùng cảm thấy được "nghe" trước cả khi viết ra
+                    câu chuyện của mình */}
+                <AnimatePresence mode="wait">
+                  {canContinue && mood !== null && (
+                    <motion.p
+                      key={mood}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.4, delay: 0.1 }}
+                      className="mt-4 text-center text-sm italic text-base-text-secondary/80"
+                    >
+                      {moodAcknowledgment(mood)}
+                    </motion.p>
+                  )}
+                </AnimatePresence>
 
                 {/* Continue button — chỉ hiện khi đã chọn mood */}
                 <AnimatePresence>

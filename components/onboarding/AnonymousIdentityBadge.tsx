@@ -15,9 +15,11 @@ import {
   Music,
   Flame,
   X,
-  Check,
+  Pencil,
+  LogOut,
 } from "lucide-react";
-import { IdentityIcon, IdentityVibe } from "@/lib/identity";
+import { getIdentityDisplayName, IdentityIcon, IdentityVibe } from "@/lib/identity";
+import { AIAvatarOrb } from "./AIAvatarOrb";
 import { useAppState } from "@/context/AppStateContext";
 import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
@@ -130,13 +132,14 @@ const VIBE_META: Record<IdentityVibe, VibeMeta> = {
 
 export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBadgeProps) {
   const { identity, regenerateIdentity, setIdentityVibe, hydrated } = useAppState();
-  const { user, isAuthenticated, signOut } = useAuth();
+  const { isAuthenticated, signOut } = useAuth();
   const router = useRouter();
   const [showVibeSelector, setShowVibeSelector] = useState(false);
   const [justChanged, setJustChanged] = useState<IdentityVibe | null>(null);
 
   const activeVibe = identity.vibe || "cozy";
   const meta = VIBE_META[activeVibe];
+  const isUser = identity.kind === "user";
 
   if (!hydrated) {
     return <div className="h-9 w-24 animate-pulse rounded-full bg-white/8" />;
@@ -151,6 +154,17 @@ export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBad
     }, 1200);
   }
 
+  function handleEditProfile() {
+    setShowVibeSelector(false);
+    router.push("/profile-setup");
+  }
+
+  function handleSignOut() {
+    setShowVibeSelector(false);
+    signOut();
+    router.push("/auth");
+  }
+
   return (
     <div className="relative flex flex-col items-end gap-1.5">
       {/* ── Main Badge ── */}
@@ -163,13 +177,17 @@ export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBad
         <button
           aria-label="Chọn hệ cảm xúc (Vibe)"
           onClick={() => setShowVibeSelector(!showVibeSelector)}
-          className="orb-btn flex h-7 w-7 items-center justify-center rounded-full bg-white/5 transition-colors hover:bg-white/10"
+          className="orb-btn flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/5 transition-colors hover:bg-white/10"
           style={{
             minHeight: 0,
             color: meta.accentColor,
           }}
         >
-          <IdentityIconGlyph icon={identity.icon} size={15} />
+          {isUser ? (
+            <AIAvatarOrb seed={identity.avatarSeed} vibe={activeVibe} size={28} />
+          ) : (
+            <IdentityIconGlyph icon={identity.icon} size={15} />
+          )}
         </button>
 
         {!compact && (
@@ -177,12 +195,12 @@ export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBad
             className="text-xs font-semibold text-base-text-primary"
             suppressHydrationWarning
           >
-            {identity.name}
+            {getIdentityDisplayName(identity)}
           </span>
         )}
 
         <button
-          aria-label="Đổi tên ẩn danh khác"
+          aria-label={isUser ? "Đổi kiểu avatar khác" : "Đổi tên ẩn danh khác"}
           onClick={regenerateIdentity}
           className="orb-btn text-base-text-secondary/70 hover:text-base-text-primary p-0.5 transition-colors"
           style={{ minHeight: 0 }}
@@ -318,6 +336,26 @@ export function AnonymousIdentityBadge({ compact = false }: AnonymousIdentityBad
                 );
               })}
             </div>
+
+            {/* Account actions — chỉ hiện với Registered user (Module 1.1/1.2) */}
+            {isAuthenticated && (
+              <div className="border-t border-white/8 p-3 flex flex-col gap-1.5">
+                <button
+                  onClick={handleEditProfile}
+                  className="orb-btn flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-base-text-secondary hover:bg-white/5 hover:text-base-text-primary transition-colors"
+                  style={{ minHeight: 0 }}
+                >
+                  <Pencil size={13} /> Chỉnh sửa tên &amp; avatar
+                </button>
+                <button
+                  onClick={handleSignOut}
+                  className="orb-btn flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-critical/80 hover:bg-critical/10 hover:text-critical transition-colors"
+                  style={{ minHeight: 0 }}
+                >
+                  <LogOut size={13} /> Đăng xuất
+                </button>
+              </div>
+            )}
 
             {/* Panel footer */}
             <div

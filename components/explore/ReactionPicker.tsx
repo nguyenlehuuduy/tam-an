@@ -3,73 +3,27 @@
 import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import { useState } from "react";
+import { useLanguage } from "@/context/LanguageContext";
 
 interface ReactionPreset {
   key: string;
   emoji: string;
-  label: string;
+  i18nKey: string;
   glowClass: string;
   glowColor: string;
 }
 
-// Enhanced với emoji ẩn dụ + glow class
+// Module 8.1 — nhãn hiển thị giờ lấy từ lib/i18n.ts (reactions.presets.*)
+// thay vì hardcode tiếng Việt, để đổi được sang tiếng Anh khi user chọn.
 const REACTION_PRESETS: ReactionPreset[] = [
-  {
-    key: "not-alone",
-    emoji: "🫂",
-    label: "Bạn không cô đơn đâu",
-    glowClass: "reaction-heart",
-    glowColor: "rgba(255, 180, 162, 0.4)",
-  },
-  {
-    key: "i-hear-you",
-    emoji: "🌙",
-    label: "Mình đang lắng nghe bạn",
-    glowClass: "reaction-moon",
-    glowColor: "rgba(179, 136, 255, 0.4)",
-  },
-  {
-    key: "let-it-drift",
-    emoji: "🌊",
-    label: "Mọi chuyện rồi sẽ qua",
-    glowClass: "reaction-star",
-    glowColor: "rgba(79, 209, 197, 0.4)",
-  },
-  {
-    key: "warm-hug",
-    emoji: "🕯️",
-    label: "Gửi bạn một cái ôm ấm áp",
-    glowClass: "reaction-candle",
-    glowColor: "rgba(255, 214, 0, 0.4)",
-  },
-  {
-    key: "lighter-tomorrow",
-    emoji: "🌅",
-    label: "Ngày mai trời lại sáng",
-    glowClass: "reaction-heart",
-    glowColor: "rgba(255, 138, 80, 0.4)",
-  },
-  {
-    key: "brave",
-    emoji: "⭐",
-    label: "Bạn đã rất can đảm rồi",
-    glowClass: "reaction-star",
-    glowColor: "rgba(124, 158, 255, 0.4)",
-  },
-  {
-    key: "im-here",
-    emoji: "💙",
-    label: "Dù thế nào, vẫn có mình ở đây",
-    glowClass: "reaction-heart",
-    glowColor: "rgba(100, 160, 255, 0.4)",
-  },
-  {
-    key: "shining-star",
-    emoji: "✨",
-    label: "Bạn xứng đáng được bình yên",
-    glowClass: "reaction-candle",
-    glowColor: "rgba(245, 214, 125, 0.45)",
-  },
+  { key: "not-alone", emoji: "🫂", i18nKey: "reactions.presets.notAlone", glowClass: "reaction-heart", glowColor: "rgba(255, 180, 162, 0.4)" },
+  { key: "i-hear-you", emoji: "🌙", i18nKey: "reactions.presets.iHearYou", glowClass: "reaction-moon", glowColor: "rgba(179, 136, 255, 0.4)" },
+  { key: "let-it-drift", emoji: "🌊", i18nKey: "reactions.presets.letItDrift", glowClass: "reaction-star", glowColor: "rgba(79, 209, 197, 0.4)" },
+  { key: "warm-hug", emoji: "🕯️", i18nKey: "reactions.presets.warmHug", glowClass: "reaction-candle", glowColor: "rgba(255, 214, 0, 0.4)" },
+  { key: "lighter-tomorrow", emoji: "🌅", i18nKey: "reactions.presets.lighterTomorrow", glowClass: "reaction-heart", glowColor: "rgba(255, 138, 80, 0.4)" },
+  { key: "brave", emoji: "⭐", i18nKey: "reactions.presets.brave", glowClass: "reaction-star", glowColor: "rgba(124, 158, 255, 0.4)" },
+  { key: "im-here", emoji: "💙", i18nKey: "reactions.presets.imHere", glowClass: "reaction-heart", glowColor: "rgba(100, 160, 255, 0.4)" },
+  { key: "shining-star", emoji: "✨", i18nKey: "reactions.presets.shiningStar", glowClass: "reaction-candle", glowColor: "rgba(245, 214, 125, 0.45)" },
 ];
 
 interface ReactionPickerProps {
@@ -80,6 +34,7 @@ interface ReactionPickerProps {
 
 export function ReactionPicker({ selectedKey, onSelect, disabled }: ReactionPickerProps) {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  const { t } = useLanguage();
 
   return (
     <div className="grid grid-cols-2 gap-2">
@@ -149,7 +104,7 @@ export function ReactionPicker({ selectedKey, onSelect, disabled }: ReactionPick
             </motion.span>
 
             {/* Label */}
-            <span className="leading-snug">{preset.label}</span>
+            <span className="leading-snug">{t(preset.i18nKey)}</span>
           </motion.button>
         );
       })}
