@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useMotionValue, useTransform } from "framer-motion";
+import { motion, useMotionValue, useTransform, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useState, useRef, useEffect } from "react";
 import { StoryType } from "@/lib/mockSignals";
 import { playReleaseBubble, playReleaseStar } from "@/lib/sound";
@@ -30,13 +30,42 @@ interface Particle {
 // Ngưỡng vuốt để kích hoạt nghi thức thả (px)
 const THRESHOLD = 90;
 
+// =====================================================
+// LỜI THÌ THẦM LÚC THẢ — xuất hiện đúng khoảnh khắc particle tan biến, để
+// hành động "thả đi" cảm giác như được không gian đón nhận thật sự, thay
+// vì chỉ là một animation UI. Không phải toast thông báo — là một câu nói
+// rất ngắn, như chính bầu trời/đại dương đang đáp lại.
+// =====================================================
+const STAR_WHISPERS = [
+  "Ngôi sao này giờ là của bầu trời rồi.",
+  "Một ánh sáng nữa vừa hoà vào dải ngân hà.",
+  "Điều này giờ được bầu trời giữ hộ bạn.",
+  "Đã có một ai đó nữa được nhìn thấy đêm nay.",
+];
+
+const BUBBLE_WHISPERS = [
+  "Bong bóng này giờ đã thuộc về đại dương.",
+  "Đại dương vừa nhận thêm một điều bạn từng giữ kín.",
+  "Cứ để nó trôi đi — biển sẽ giữ hộ bạn.",
+  "Một điều nặng lòng vừa được thả nhẹ xuống sâu.",
+];
+
+function pickWhisper(isStar: boolean): string {
+  const pool = isStar ? STAR_WHISPERS : BUBBLE_WHISPERS;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 export function ReleaseGesture({ type, onReleased }: ReleaseGestureProps) {
   const [releasing, setReleasing] = useState(false);
   // Loại thật sự sẽ được thả — quyết định bởi HƯỚNG kéo lúc buông tay,
   // không còn bị khoá cứng theo `type` ban đầu nữa.
   const [releasedType, setReleasedType] = useState<StoryType>(type);
+  const [whisper, setWhisper] = useState<string | null>(null);
   const { soundEnabled, mood } = useAppState();
   const isStar = releasedType === "star";
+  // Tôn trọng cài đặt "giảm chuyển động" của hệ điều hành — bớt hạt nổ,
+  // bỏ hiệu ứng lắc/xoay, chỉ giữ fade nhẹ khi người dùng bật tuỳ chọn này.
+  const prefersReducedMotion = useReducedMotion();
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const particlesRef = useRef<Particle[]>([]);
@@ -63,6 +92,7 @@ export function ReleaseGesture({ type, onReleased }: ReleaseGestureProps) {
     const finalType: StoryType = draggedUp ? "star" : "bubble";
     const finalIsStar = finalType === "star";
     setReleasedType(finalType);
+    setWhisper(pickWhisper(finalIsStar));
     setReleasing(true);
 
     // Kích hoạt âm thanh hợp âm trị liệu dựa trên mood của người dùng
@@ -82,7 +112,10 @@ export function ReleaseGesture({ type, onReleased }: ReleaseGestureProps) {
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
 
-    const count = 40; // Số lượng hạt nổ
+    // Số lượng hạt nổ — giảm mạnh khi người dùng bật "giảm chuyển động"
+    // của hệ điều hành, thay vì tắt hẳn hiệu ứng (vẫn giữ cảm giác "có gì
+    // đó vừa xảy ra", chỉ bớt dồn dập).
+    const count = prefersReducedMotion ? 10 : 40;
     const particles: Particle[] = [];
 
     for (let i = 0; i < count; i++) {
@@ -201,6 +234,24 @@ export function ReleaseGesture({ type, onReleased }: ReleaseGestureProps) {
         Vuốt lên để hoá thành sao · Vuốt xuống để hoá thành bong bóng
       </p>
 
+      {/* Lời thì thầm — xuất hiện đúng lúc particle nổ ra, tan biến trước
+          khi màn hình chuyển sang /explore, để lại dư âm ấm áp thay vì im
+          lặng đột ngột */}
+      <AnimatePresence>
+        {releasing && whisper && (
+          <motion.p
+            key="release-whisper"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: [0, 1, 1, 0], y: [10, 0, 0, -8] }}
+            transition={{ duration: 1.5, times: [0, 0.25, 0.75, 1], ease: "easeOut" }}
+            className="pointer-events-none absolute bottom-2 w-full px-6 text-center text-[13px] font-medium italic"
+            style={{ color: isStar ? "#FFE9A8" : "#E4FFFA" }}
+          >
+            {whisper}
+          </motion.p>
+        )}
+      </AnimatePresence>
+
       {/* Nơi hiển thị Star hoặc Bubble kéo thả — màu sắc đổi ngay theo
           hướng đang kéo, để người dùng thấy rõ mình sắp thả về đâu */}
       <motion.div
@@ -212,7 +263,9 @@ export function ReleaseGesture({ type, onReleased }: ReleaseGestureProps) {
           releasing
             ? {
                 y: isStar ? -320 : 320,
-                x: isStar ? [0, -15, 20, 0] : [0, 15, -20, 0],
+                // Bỏ hiệu ứng lắc ngang khi người dùng bật "giảm chuyển
+                // động" — chỉ giữ chuyển động thẳng lên/xuống.
+                x: prefersReducedMotion ? 0 : isStar ? [0, -15, 20, 0] : [0, 15, -20, 0],
                 opacity: [1, 1, 0],
                 scale: [1, 1.2, 0.2],
               }

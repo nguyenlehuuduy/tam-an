@@ -18,6 +18,7 @@ import { randomAvatarSeed } from "@/lib/avatar";
 import {
   MOCK_OCEAN_STORIES,
   MOCK_SKY_STORIES,
+  ReactionKind,
   Story,
   StoryAuthor,
   StoryType,
@@ -25,6 +26,7 @@ import {
 } from "@/lib/mockSignals";
 import { moderateContent } from "@/lib/moderation";
 import { useAuth } from "@/context/AuthContext";
+import { fetchVisibleStories, insertReaction, insertStory } from "@/lib/storiesApi";
 
 const STORAGE_KEY = "tram-phat-sang:v2"; // Đổi key để tránh xung đột dữ liệu cũ
 
@@ -37,8 +39,11 @@ export interface MoodHistoryEntry {
 // MODULE 3.2 — Phản hồi đa dạng thay vì chỉ preset text.
 // 5 hình thức: emotion react nhanh, sticker/emoji, virtual hug, món quà ẩn
 // dụ, và lời nhắn (preset + tuỳ chọn viết ngắn — có moderation).
+// `ReactionKind` giờ định nghĩa trong lib/mockSignals.ts — re-export lại
+// ở đây để mọi nơi đang import từ "@/context/AppStateContext" không cần
+// đổi gì (xem ghi chú trong mockSignals.ts).
 // =====================================================
-export type ReactionKind = "emotion" | "sticker" | "hug" | "gift" | "message";
+export type { ReactionKind };
 
 /** Đếm số reaction đã gửi trong ngày hiện tại — giới hạn spam (spec 3.2
  * "Giới hạn số reaction / user / story / ngày"). Giới hạn theo story đã có
@@ -113,7 +118,7 @@ interface AppStateValue {
   reactedStoryIds: string[];
   /** Trả về false nếu bị chặn (đã reaction story này rồi, hoặc đã chạm
    * giới hạn reaction/ngày) để UI có thể phản hồi phù hợp. */
-  sendReaction: (storyId: string, kind: ReactionKind, hasMessage?: boolean) => boolean;
+  sendReaction: (storyId: string, kind: ReactionKind, hasMessage?: boolean, messageText?: string) => boolean;
   /** Còn lại bao nhiêu reaction có thể gửi hôm nay — spec 3.2 giới hạn/ngày. */
   reactionsRemainingToday: number;
 
@@ -284,6 +289,28 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setHydrated(true);
   }, []);
 
+  // Lấy câu chuyện THẬT từ Supabase (nếu đã cấu hình) và BỔ SUNG vào dữ
+  // liệu mẫu đang có — không thay thế hoàn toàn, để không gian vẫn cảm
+  // thấy sống động ngay cả khi mới có rất ít người dùng thật. An toàn khi
+  // lỗi: fetchVisibleStories() tự trả về [] nếu chưa cấu hình/lỗi mạng/
+  // chưa chạy schema.sql, nên không ảnh hưởng gì tới app nếu Supabase
+  // chưa sẵn sàng (xem lib/storiesApi.ts).
+  useEffect(() => {
+    let cancelled = false;
+    fetchVisibleStories().then((realStories) => {
+      if (cancelled || realStories.length === 0) return;
+      setAllStories((prev) => {
+        const existingIds = new Set(prev.map((s) => s.id));
+        const newOnes = realStories.filter((s) => !existingIds.has(s.id));
+        if (newOnes.length === 0) return prev;
+        return [...newOnes, ...prev];
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Persist relevant slices whenever they change.
   useEffect(() => {
     if (!hydrated) return;
@@ -396,7 +423,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     const finalType = overrideType ?? draft.type;
     if (!finalType || draft.content.trim().length === 0) return null;
 
-    const { status, highRisk } = moderateContent(draft.content);
+    const { status, highRisk, matchedTerms } = moderateContent(draft.content);
 
     // Snapshot danh tính ẩn danh tại thời điểm thả — spec Module 2.1
     // "author_identity (ẩn danh)". Không hiển thị cho người khác xem.
@@ -405,14 +432,18 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         ? { name: identity.name, vibe: identity.vibe, icon: identity.icon }
         : { name: identity.displayName, vibe: identity.vibe };
 
+    const tempId = `u-${Date.now()}`;
+    // Trải rộng khắp không gian ảo (5–95%) thay vì co cụm giữa màn hình,
+    // để việc kéo lướt khám phá luôn có gì đó chờ ở các góc xa.
+    const x = 5 + Math.random() * 90;
+    const y = 5 + Math.random() * 90;
+
     const story: Story = {
-      id: `u-${Date.now()}`,
+      id: tempId,
       type: finalType,
       content: draft.content.trim(),
-      // Trải rộng khắp không gian ảo (5–95%) thay vì co cụm giữa màn hình,
-      // để việc kéo lướt khám phá luôn có gì đó chờ ở các góc xa.
-      x: 5 + Math.random() * 90,
-      y: 5 + Math.random() * 90,
+      x,
+      y,
       size: "md",
       warmth: "few",
       reactionCount: 0,
@@ -423,7 +454,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       author,
     };
 
-    // Lưu vào lịch sử câu chuyện của user
+    // Lưu vào lịch sử câu chuyện của user — TỨC THÌ, không chờ mạng.
     setUserStories((prev) => [story, ...prev]);
     setAllStories((prev) => [story, ...prev]);
     setLastReleasedStory(story);
@@ -437,6 +468,30 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     }
 
     setDraft({ content: "", type: null });
+
+    // Lưu THẬT lên Supabase ở nền, không chặn UI chờ mạng (xem
+    // lib/storiesApi.ts). authorId luôn null hiện tại — Auth thật (magic
+    // link qua Supabase) chưa được nối, xem supabase/BACKEND_INTEGRATION.md
+    // mục 6; khi nối xong, thay bằng auth.uid() thật ở đây.
+    insertStory({
+      authorId: null,
+      author,
+      type: finalType,
+      content: story.content,
+      x,
+      y,
+      moodAtRelease: mood,
+      status,
+      matchedTerms,
+    }).then((saved) => {
+      if (!saved) return;
+      // Thay id tạm bằng id thật từ database — để các reaction gửi tiếp
+      // theo sau (cùng phiên) lưu đúng vào đúng câu chuyện trên server.
+      const swap = (list: Story[]) => list.map((s) => (s.id === tempId ? saved : s));
+      setUserStories(swap);
+      setAllStories(swap);
+      setLastReleasedStory((prev) => (prev && prev.id === tempId ? saved : prev));
+    });
 
     return { story, highRisk };
   }, [draft, mood, identity]);
@@ -454,7 +509,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   // duy nhất còn lại là tổng số lượt gửi trong một ngày (chống spam/bully
   // trên diện rộng), không phải theo từng story riêng lẻ.
   const sendReaction = useCallback(
-    (storyId: string, kind: ReactionKind, hasMessage?: boolean): boolean => {
+    (storyId: string, kind: ReactionKind, hasMessage?: boolean, messageText?: string): boolean => {
       const key = todayKey();
       const usedToday = reactionDay.date === key ? reactionDay.count : 0;
       if (usedToday >= DAILY_REACTION_LIMIT) return false;
@@ -476,6 +531,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
           return { ...s, reactionCount, warmth: warmthFromCount(reactionCount) };
         })
       );
+
+      // Lưu THẬT lên Supabase ở nền — không chặn UI chờ mạng. senderId
+      // luôn null hiện tại, tương tự releaseDraft() (chưa nối Auth thật).
+      // Nếu storyId là id tạm (câu chuyện vừa thả trong CÙNG phiên, chưa
+      // kịp đồng bộ id thật từ server) thì lượt gửi này sẽ không lưu được
+      // lên server — vẫn cập nhật UI cục bộ bình thường ở trên, chỉ là
+      // chưa đồng bộ, chấp nhận được ở giai đoạn tích hợp này.
+      insertReaction({ storyId, senderId: null, kind, message: hasMessage ? messageText : undefined });
 
       return true;
     },

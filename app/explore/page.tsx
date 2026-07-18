@@ -15,6 +15,7 @@ import {
   useMotionValue,
   useSpring,
   useTransform,
+  useReducedMotion,
   animate,
 } from "framer-motion";
 import {
@@ -112,6 +113,18 @@ export default function ExplorePage() {
   const [viewportSize, setViewportSize] = useState({ width: 900, height: 700 });
   const hasCenteredRef = useRef(false);
 
+  // =====================================================
+  // "VỌNG" — thỉnh thoảng một câu chuyện CŨ (đã thả từ lâu) trôi nhẹ lại
+  // gần người đang xem, như một lời nhắc "có người từng cảm thấy giống
+  // bạn". Tạo kết nối xuyên thời gian giữa những người dùng không hề gặp
+  // nhau, mà không cần real-time đa người dùng thật (dùng được ngay cả ở
+  // giai đoạn chỉ có localStorage). Không làm phiền: tự ẩn sau ít giây,
+  // không chặn thao tác, không lặp lại câu vừa hiện.
+  // =====================================================
+  const [echoStory, setEchoStory] = useState<Story | null>(null);
+  const lastEchoIdRef = useRef<string | null>(null);
+  const prefersReducedMotion = useReducedMotion();
+
   // Vị trí kéo — dùng trực tiếp (không qua spring) cho chính khung kéo để
   // luôn bám sát ngón tay/chuột 1:1, tránh cảm giác trễ/lag khi lướt.
   const dragX = useMotionValue(0);
@@ -190,6 +203,43 @@ export default function ExplorePage() {
     [stories, isSky]
   );
 
+  // Lên lịch "vọng" — chỉ chọn trong số câu chuyện đã đủ cũ (>3 giờ), để
+  // không bao giờ vô tình "vọng lại" chính câu chuyện ai đó vừa mới thả
+  // (lúc đó họ cần im lặng đón nhận, không cần bị nhắc lại ngay).
+  useEffect(() => {
+    if (showIntro) return;
+    let timer: ReturnType<typeof setTimeout>;
+    function scheduleNext() {
+      const delay = 55000 + Math.random() * 40000; // 55–95 giây, không đều đặn máy móc
+      timer = setTimeout(() => {
+        setOpenStory((currentOpen) => {
+          if (!currentOpen) {
+            const now = Date.now();
+            const candidates = visible.filter(
+              (s) => now - s.createdAt > 3 * 60 * 60 * 1000 && s.id !== lastEchoIdRef.current
+            );
+            if (candidates.length > 0) {
+              const pick = candidates[Math.floor(Math.random() * candidates.length)];
+              lastEchoIdRef.current = pick.id;
+              setEchoStory(pick);
+            }
+          }
+          return currentOpen;
+        });
+        scheduleNext();
+      }, delay);
+    }
+    scheduleNext();
+    return () => clearTimeout(timer);
+  }, [showIntro, visible]);
+
+  // Vọng tự ẩn sau 9 giây nếu không ai chạm vào
+  useEffect(() => {
+    if (!echoStory) return;
+    const t = setTimeout(() => setEchoStory(null), 9000);
+    return () => clearTimeout(t);
+  }, [echoStory]);
+
   // =====================================================
   // MODULE 4.3 (MVP slice) — "Nhận biết tâm trạng đối phương": KHÔNG đọc
   // suy nghĩ hay lộ danh tính từng người, chỉ tổng hợp (aggregate) mood
@@ -265,7 +315,11 @@ export default function ExplorePage() {
                 <motion.div
                   className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full"
                   animate={{
-                    boxShadow: isSky
+                    boxShadow: prefersReducedMotion
+                      ? isSky
+                        ? "0 0 50px rgba(162,119,255,0.5)"
+                        : "0 0 50px rgba(79,209,197,0.5)"
+                      : isSky
                       ? [
                           "0 0 30px rgba(162,119,255,0.4)",
                           "0 0 70px rgba(162,119,255,0.6)",
@@ -277,7 +331,7 @@ export default function ExplorePage() {
                           "0 0 30px rgba(79,209,197,0.4)",
                         ],
                   }}
-                  transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+                  transition={prefersReducedMotion ? undefined : { duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
                   style={{
                     background: isSky
                       ? "radial-gradient(circle at 40% 40%, rgba(162,119,255,0.4), rgba(45,31,94,0.7))"
@@ -484,6 +538,44 @@ export default function ExplorePage() {
         </motion.div>
 
         {/* ======================================================
+            "VỌNG" — một câu chuyện cũ trôi nhẹ lại gần, kết nối xuyên
+            thời gian giữa những người không hề gặp nhau. Không chặn thao
+            tác, tự ẩn sau vài giây, chạm vào để mở đọc trọn vẹn.
+            ====================================================== */}
+        <AnimatePresence>
+          {echoStory && !openStory && (
+            <motion.button
+              key={`echo-${echoStory.id}`}
+              initial={{ opacity: 0, y: -14, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.96 }}
+              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              onClick={() => {
+                setOpenStory(echoStory);
+                setEchoStory(null);
+              }}
+              className="pointer-events-auto absolute left-1/2 top-[88px] z-40 w-[86%] max-w-xs -translate-x-1/2 rounded-2xl px-4 py-3 text-left md:top-[96px]"
+              style={{
+                background: "rgba(10,14,24,0.82)",
+                backdropFilter: "blur(16px)",
+                border: `1px solid ${isSky ? "rgba(124,158,255,0.25)" : "rgba(79,209,197,0.25)"}`,
+                boxShadow: `0 8px 28px rgba(0,0,0,0.4), 0 0 20px ${isSky ? "rgba(124,158,255,0.1)" : "rgba(79,209,197,0.1)"}`,
+              }}
+            >
+              <p
+                className="text-[9.5px] font-bold uppercase tracking-[0.15em]"
+                style={{ color: isSky ? "#A8C8FF" : "#9FE8DD" }}
+              >
+                Một câu chuyện cũ vừa trôi ngang qua đây…
+              </p>
+              <p className="mt-1 line-clamp-2 text-[12px] italic leading-snug text-base-text-secondary/85">
+                "{echoStory.content}"
+              </p>
+            </motion.button>
+          )}
+        </AnimatePresence>
+
+        {/* ======================================================
             DRAGGABLE SPACE CANVAS — stories floating
             ====================================================== */}
         <div ref={containerRef} className="relative flex-1 w-full overflow-hidden z-10">
@@ -660,27 +752,32 @@ export default function ExplorePage() {
               transition={{ delay: 0.8, type: "spring", stiffness: 260, damping: 22 }}
               className="pointer-events-auto relative"
             >
-              {/* Glow pulses */}
-              <motion.div
-                className="absolute inset-0 rounded-full pointer-events-none"
-                animate={{ scale: [1, 1.5, 1], opacity: [0.4, 0, 0.4] }}
-                transition={{ duration: 2.5, repeat: Infinity }}
-                style={{
-                  background: isSky
-                    ? "rgba(124,158,255,0.3)"
-                    : "rgba(79,209,197,0.3)",
-                }}
-              />
-              <motion.div
-                className="absolute inset-0 rounded-full pointer-events-none"
-                animate={{ scale: [1, 2, 1], opacity: [0.2, 0, 0.2] }}
-                transition={{ duration: 3, repeat: Infinity, delay: 0.5 }}
-                style={{
-                  background: isSky
-                    ? "rgba(192,132,252,0.2)"
-                    : "rgba(79,209,197,0.15)",
-                }}
-              />
+              {/* Glow pulses — tắt hẳn hiệu ứng lặp vô hạn khi người dùng
+                  bật "giảm chuyển động", chỉ giữ quầng sáng tĩnh */}
+              {!prefersReducedMotion && (
+                <>
+                  <motion.div
+                    className="absolute inset-0 rounded-full pointer-events-none"
+                    animate={{ scale: [1, 1.5, 1], opacity: [0.4, 0, 0.4] }}
+                    transition={{ duration: 2.5, repeat: Infinity }}
+                    style={{
+                      background: isSky
+                        ? "rgba(124,158,255,0.3)"
+                        : "rgba(79,209,197,0.3)",
+                    }}
+                  />
+                  <motion.div
+                    className="absolute inset-0 rounded-full pointer-events-none"
+                    animate={{ scale: [1, 2, 1], opacity: [0.2, 0, 0.2] }}
+                    transition={{ duration: 3, repeat: Infinity, delay: 0.5 }}
+                    style={{
+                      background: isSky
+                        ? "rgba(192,132,252,0.2)"
+                        : "rgba(79,209,197,0.15)",
+                    }}
+                  />
+                </>
+              )}
 
               <Link
                 href="/write"

@@ -1,6 +1,6 @@
 "use client";
 
-import { animate, motion, MotionValue, useTransform } from "framer-motion";
+import { animate, motion, MotionValue, useTransform, useReducedMotion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { Story } from "@/lib/mockSignals";
 
@@ -68,6 +68,7 @@ export function SpaceMap({
 }: SpaceMapProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [showHint, setShowHint] = useState(true);
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
     const t = setTimeout(() => setShowHint(false), 4200);
@@ -142,12 +143,12 @@ export function SpaceMap({
 
       {/* Nhãn góc — tên không gian (trái) / MAP (phải) */}
       <span
-        className="pointer-events-none absolute left-2 top-1.5 text-[8px] font-bold uppercase tracking-[0.15em]"
+        className="pointer-events-none absolute left-2 top-1.5 text-[9.5px] font-bold uppercase tracking-[0.1em]"
         style={{ color: `${accent}99` }}
       >
         {isSky ? "Sky" : "Ocean"}
       </span>
-      <span className="pointer-events-none absolute right-2 top-1.5 text-[8px] font-bold uppercase tracking-[0.15em] text-white/30">
+      <span className="pointer-events-none absolute right-2 top-1.5 text-[9.5px] font-bold uppercase tracking-[0.1em] text-white/30">
         Map
       </span>
 
@@ -175,13 +176,15 @@ export function SpaceMap({
               transform: "translate(-50%, -50%)",
             }}
           >
-            {/* Quầng nhấp nháy cho câu chuyện đã được khích lệ bằng lời nhắn */}
+            {/* Quầng nhấp nháy cho câu chuyện đã được khích lệ bằng lời nhắn
+                — giữ nguyên tĩnh (không lặp vô hạn) khi người dùng bật
+                "giảm chuyển động" của hệ điều hành */}
             {encouraged && (
               <motion.span
                 className="absolute rounded-full pointer-events-none"
                 style={{ border: `1px solid ${dotColorBright}`, width: v.size + 6, height: v.size + 6 }}
-                animate={{ scale: [1, 1.9, 1], opacity: [0.6, 0, 0.6] }}
-                transition={{ duration: 2.2, repeat: Infinity, ease: "easeOut" }}
+                animate={prefersReducedMotion ? { opacity: 0.35 } : { scale: [1, 1.9, 1], opacity: [0.6, 0, 0.6] }}
+                transition={prefersReducedMotion ? undefined : { duration: 2.2, repeat: Infinity, ease: "easeOut" }}
               />
             )}
             {/* Quầng sáng liên tục cho warmth cao ("many") — nổi bật rõ
@@ -190,8 +193,8 @@ export function SpaceMap({
               <motion.span
                 className="absolute rounded-full pointer-events-none"
                 style={{ background: `${dotColorBright}30`, width: v.size + 10, height: v.size + 10 }}
-                animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.9, 0.5] }}
-                transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                animate={prefersReducedMotion ? { opacity: 0.7 } : { scale: [1, 1.3, 1], opacity: [0.5, 0.9, 0.5] }}
+                transition={prefersReducedMotion ? undefined : { duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
               />
             )}
             <span
@@ -224,7 +227,7 @@ export function SpaceMap({
       />
 
       {/* Số lượng câu chuyện trong không gian này */}
-      <span className="pointer-events-none absolute bottom-1.5 left-2 text-[8px] text-white/35">
+      <span className="pointer-events-none absolute bottom-1.5 left-2 text-[9.5px] text-white/40">
         {stories.length} câu chuyện
       </span>
 
@@ -234,7 +237,7 @@ export function SpaceMap({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="pointer-events-none absolute bottom-1.5 right-2 text-right text-[7.5px] leading-tight text-white/30"
+          className="pointer-events-none absolute bottom-1.5 right-2 text-right text-[9px] leading-tight text-white/35"
         >
           chạm để lướt nhanh
         </motion.span>
