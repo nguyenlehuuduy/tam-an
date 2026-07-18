@@ -2,19 +2,19 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useCallback } from "react";
-import { Signal } from "@/lib/mockSignals";
+import { Story } from "@/lib/mockSignals";
 
 interface SignalOrbProps {
-  signal: Signal;
-  onTap: (signal: Signal) => void;
+  signal: Story;
+  onTap: (story: Story) => void;
   isEncouraged?: boolean; // Đã nhận lời động viên có kèm tin nhắn
 }
 
 // Kích thước cơ bản — lớn hơn nhiều để rõ ràng hơn
-const BASE_SIZE: Record<Signal["size"], number> = { sm: 32, md: 48, lg: 66 };
+const BASE_SIZE: Record<Story["size"], number> = { sm: 32, md: 48, lg: 66 };
 
 // Warmth multiplier cho kích thước
-const WARMTH_SCALE: Record<Signal["warmth"], number> = {
+const WARMTH_SCALE: Record<Story["warmth"], number> = {
   few: 1,
   some: 1.2,
   many: 1.45,
@@ -23,7 +23,7 @@ const WARMTH_SCALE: Record<Signal["warmth"], number> = {
 // Màu sắc theo warmth tier
 type OrbTier = "default" | "reacted" | "encouraged";
 
-function getOrbVisuals(signal: Signal, tier: OrbTier) {
+function getOrbVisuals(signal: Story, tier: OrbTier) {
   const isStar = signal.type === "star";
 
   if (isStar) {

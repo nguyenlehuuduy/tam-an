@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { SkyCanvas } from "@/components/canvas/SkyCanvas";
 import { useAuth } from "@/context/AuthContext";
+import { useAppState } from "@/context/AppStateContext";
 import {
   Mail,
   ArrowRight,
@@ -47,6 +48,7 @@ type Phase = "welcome" | "email" | "check";
 export default function AuthPage() {
   const router = useRouter();
   const { isAuthenticated, hydrated, sendMagicLink, confirmMagicLink, pendingEmail } = useAuth();
+  const { profileSetupComplete, hydrated: appHydrated } = useAppState();
   const [phase, setPhase] = useState<Phase>("welcome");
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
@@ -54,12 +56,12 @@ export default function AuthPage() {
   const [whisperIdx, setWhisperIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Nếu đã đăng nhập → redirect về checkin
+  // Nếu đã đăng nhập → redirect về checkin (hoặc /profile-setup nếu Registered
+  // user chưa từng tuỳ chỉnh hồ sơ — Module 1.2)
   useEffect(() => {
-    if (hydrated && isAuthenticated) {
-      router.replace("/checkin");
-    }
-  }, [hydrated, isAuthenticated, router]);
+    if (!hydrated || !appHydrated || !isAuthenticated) return;
+    router.replace(profileSetupComplete ? "/checkin" : "/profile-setup");
+  }, [hydrated, appHydrated, isAuthenticated, profileSetupComplete, router]);
 
   // Focus email input khi vào phase 2
   useEffect(() => {
@@ -73,7 +75,9 @@ export default function AuthPage() {
     if (phase !== "check") return;
     const t = setTimeout(() => {
       confirmMagicLink();
-      router.push("/checkin");
+      // Đăng nhập lần đầu → luôn ghé /profile-setup để đặt tên + avatar AI
+      // trước (Module 1.2); trang đó tự đưa họ sang /checkin sau khi xong.
+      router.push("/profile-setup");
     }, 3000);
     return () => clearTimeout(t);
   }, [phase, confirmMagicLink, router]);

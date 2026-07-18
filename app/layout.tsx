@@ -2,7 +2,10 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AppStateProvider } from "@/context/AppStateContext";
 import { AuthProvider } from "@/context/AuthContext";
+import { LanguageProvider } from "@/context/LanguageContext";
+import { NotificationProvider } from "@/context/NotificationContext";
 import { VibeSync } from "@/components/onboarding/VibeSync";
+import { NotificationEventsBridge } from "@/components/notifications/NotificationEventsBridge";
 
 export const metadata: Metadata = {
   title: "Trạm Phát Sáng",
@@ -38,12 +41,17 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-base-gradient">
-        <AuthProvider>
-          <AppStateProvider>
-            <VibeSync />
-            <main className="app-frame">{children}</main>
-          </AppStateProvider>
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <AppStateProvider>
+              <NotificationProvider>
+                <VibeSync />
+                <NotificationEventsBridge />
+                <main className="app-frame">{children}</main>
+              </NotificationProvider>
+            </AppStateProvider>
+          </AuthProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

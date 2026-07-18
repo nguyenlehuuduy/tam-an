@@ -15,10 +15,10 @@ const HIGH_RISK_KEYWORDS = [
   "tự hại",
 ];
 
-export type SignalStatus = "visible" | "pending_review";
+export type StoryStatus = "visible" | "pending_review";
 
 export interface ModerationResult {
-  status: SignalStatus;
+  status: StoryStatus;
   highRisk: boolean;
 }
 

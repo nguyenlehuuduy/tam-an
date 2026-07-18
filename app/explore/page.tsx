@@ -8,10 +8,11 @@ import {
   Plus,
   Volume2,
   VolumeX,
-  Sparkles,
-  ChevronDown,
   Compass,
   Eye,
+  Headphones,
+  Settings,
+  BookOpen,
 } from "lucide-react";
 import clsx from "clsx";
 import { SkyCanvas } from "@/components/canvas/SkyCanvas";
@@ -19,9 +20,11 @@ import { OceanCanvas } from "@/components/canvas/OceanCanvas";
 import { SignalOrb } from "@/components/canvas/SignalOrb";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { SignalCard } from "@/components/explore/SignalCard";
+import { SpaceMap } from "@/components/explore/SpaceMap";
 import { AnonymousIdentityBadge } from "@/components/onboarding/AnonymousIdentityBadge";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useAppState } from "@/context/AppStateContext";
-import { Signal } from "@/lib/mockSignals";
+import { Story } from "@/lib/mockSignals";
 import { playOpenSignal } from "@/lib/sound";
 
 type Space = "sky" | "ocean";
@@ -34,7 +37,7 @@ const SKY_WHISPERS = [
   "Chạm vào ánh sáng — để nghe điều chưa kể",
   "Có ai đó ngoài kia cũng đang nhìn lên bầu trời này",
   "Đêm nay vũ trụ có thêm một câu chuyện mới",
-  "Kéo để khám phá — bạn không cô đơn đâu",
+  "Kéo để khám phá — vẫn còn những vì sao chưa được tìm thấy",
 ];
 
 const OCEAN_WHISPERS = [
@@ -42,7 +45,7 @@ const OCEAN_WHISPERS = [
   "Chạm vào một bong bóng — nghe lời thì thầm",
   "Ai đó vừa thả điều họ giữ rất lâu xuống đây",
   "Đại dương giữ mọi bí mật, không phán xét",
-  "Lắng nghe... biển đang kể chuyện",
+  "Lắng nghe... biển đang kể chuyện, cứ lướt xa hơn xem",
 ];
 
 // Stats shown to create social presence
@@ -51,29 +54,103 @@ const STATS_DATA = {
   ocean: { count: 893, label: "bí mật đang chìm dưới biển" },
 };
 
+// =====================================================
+// Kích thước "thế giới ảo" kéo lướt được — 700% khung nhìn (thay vì 300%
+// trước đây) để không gian thật sự rộng, đủ chỗ cho hàng chục ngôi
+// sao/bong bóng mà vẫn còn nhiều góc chưa khám phá. dragRangeX/Y được suy
+// ra động từ kích thước khung nhìn đo được, dùng chung cho cả
+// dragConstraints lẫn tính toán camera trên bản đồ thu nhỏ (SpaceMap).
+// =====================================================
+const WORLD_SCALE = 7; // container = 700% kích thước khung nhìn
+
+interface DustMote {
+  id: string;
+  x: number;
+  y: number;
+  size: number;
+  opacity: number;
+  twinkleSpeed: number;
+}
+
+function generateDust(count: number, keyPrefix: string): DustMote[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `${keyPrefix}-${i}`,
+    x: Math.random() * 92 + 4,
+    y: Math.random() * 92 + 4,
+    size: Math.random() * 4 + 2,
+    opacity: Math.random() * 0.35 + 0.15,
+    twinkleSpeed: Math.random() * 3.5 + 2,
+  }));
+}
+
 export default function ExplorePage() {
-  const { signals, soundEnabled, toggleSound, encouragedSignalIds } = useAppState();
+  const { stories, soundEnabled, toggleSound, encouragedStoryIds } = useAppState();
   const [space, setSpace] = useState<Space>("sky");
-  const [openSignal, setOpenSignal] = useState<Signal | null>(null);
+  const [openStory, setOpenStory] = useState<Story | null>(null);
   const [whisperIdx, setWhisperIdx] = useState(0);
   const [showIntro, setShowIntro] = useState(true);
   const [mounted, setMounted] = useState(false);
+  // Module 2.2 — "Chỉ lắng nghe thôi": đọc thẳng từ URL (?from=listen) thay
+  // vì dùng useSearchParams để khỏi cần bọc Suspense riêng cho trang này.
+  const [listenOnly, setListenOnly] = useState(false);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [viewportSize, setViewportSize] = useState({ width: 900, height: 700 });
+  const hasCenteredRef = useRef(false);
 
-  // 3D Parallax camera tracking
+  // Vị trí kéo — dùng trực tiếp (không qua spring) cho chính khung kéo để
+  // luôn bám sát ngón tay/chuột 1:1, tránh cảm giác trễ/lag khi lướt.
   const dragX = useMotionValue(0);
   const dragY = useMotionValue(0);
-  const springX = useSpring(dragX, { stiffness: 100, damping: 30 });
-  const springY = useSpring(dragY, { stiffness: 100, damping: 30 });
-  const parallaxLayer1X = useTransform(springX, [-1000, 1000], [-30, 30]);
-  const parallaxLayer1Y = useTransform(springY, [-1000, 1000], [-30, 30]);
+
+  // Đo kích thước khung nhìn thật để tính đúng toạ độ camera cho SpaceMap,
+  // và — quan trọng hơn — để CĂN GIỮA camera vào đúng trung tâm thế giới
+  // ảo ngay lần đo đầu tiên (world div mặc định neo góc trên-trái, nếu
+  // không bù lại thì người dùng sẽ mở app và thấy ngay một góc trống thay
+  // vì trung tâm không gian). Chỉ tự căn giữa MỘT LẦN DUY NHẤT — các lần
+  // đo lại sau (resize) không được ghi đè vị trí đang xem của người dùng.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      setViewportSize({ width: w, height: h });
+      if (!hasCenteredRef.current && w > 0 && h > 0) {
+        hasCenteredRef.current = true;
+        dragX.set(-((w * WORLD_SCALE - w) / 2));
+        dragY.set(-((h * WORLD_SCALE - h) / 2));
+      }
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [dragX, dragY]);
+  // Spring RIÊNG, nhẹ hơn nhiều — chỉ dùng cho 2 lớp bụi nền (không phải
+  // cho từng câu chuyện) để tạo cảm giác chiều sâu mà không tốn hiệu năng.
+  const springX = useSpring(dragX, { stiffness: 90, damping: 26 });
+  const springY = useSpring(dragY, { stiffness: 90, damping: 26 });
+
+  // 2 lớp parallax duy nhất (thay vì tính riêng cho từng hạt bụi/từng câu
+  // chuyện như bản trước — nguyên nhân chính gây lag và hiện tượng các
+  // orb "tự xoay/lắc" trong lúc kéo do độ trễ lò xo khác nhau ở mỗi item).
+  const farX = useTransform(springX, (v) => v * -0.12);
+  const farY = useTransform(springY, (v) => v * -0.12);
+  const nearX = useTransform(springX, (v) => v * 0.1);
+  const nearY = useTransform(springY, (v) => v * 0.1);
 
   const isSky = space === "sky";
   const whispers = isSky ? SKY_WHISPERS : OCEAN_WHISPERS;
   const stats = STATS_DATA[space];
 
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    setListenOnly(params.get("from") === "listen");
+  }, []);
 
   // Auto-cycle whispers
   useEffect(() => {
@@ -95,87 +172,58 @@ export default function ExplorePage() {
   }, [space]);
 
   const visible = useMemo(
-    () => signals.filter((s) => (isSky ? s.type === "star" : s.type === "bubble")),
-    [signals, isSky]
+    () => stories.filter((s) => (isSky ? s.type === "star" : s.type === "bubble")),
+    [stories, isSky]
   );
 
-  // Sinh các hạt nền (sao/bong bóng trang trí) lơ lửng ngẫu nhiên trong không gian ảo
-  const ambientElements = useMemo(() => {
-    return Array.from({ length: 80 }, (_, i) => {
-      const rand = (max: number) => Math.random() * max;
-      const depth = rand(0.7) + 0.15; // 0.15 -> 0.85
-      return {
-        id: `ambient-${i}`,
-        x: rand(90) + 5,
-        y: rand(90) + 5,
-        size: rand(6) + 2, // Kích thước ngẫu nhiên
-        depth,
-        opacity: rand(0.4) + 0.15,
-        twinkleSpeed: rand(3.5) + 2, // Tốc độ lấp lánh/nhấp nháy
-      };
-    });
-  }, []);
+  // =====================================================
+  // MODULE 4.3 (MVP slice) — "Nhận biết tâm trạng đối phương": KHÔNG đọc
+  // suy nghĩ hay lộ danh tính từng người, chỉ tổng hợp (aggregate) mood
+  // trung bình ẩn danh của các câu chuyện đang hiển thị trong không gian
+  // hiện tại, để gợi ý tinh tế cách người xem nên cư xử với nhau.
+  // Việc ghép cặp "mood buddy" ẩn danh (2 user pattern tương đồng) là
+  // hướng Phase 2+ theo đúng đặc tả — CHƯA triển khai ở đây vì cần thêm
+  // nghiên cứu về đạo đức/consent trước khi làm.
+  // =====================================================
+  const communityMood = useMemo(() => {
+    const withMood = visible.filter((s) => s.moodAtRelease !== null);
+    if (withMood.length === 0) return null;
+    const sum = withMood.reduce((acc, s) => acc + (s.moodAtRelease as number), 0);
+    return sum / withMood.length;
+  }, [visible]);
 
-  function handleTap(signal: Signal) {
-    setOpenSignal(signal);
+  const communityMoodMeta = useMemo(() => {
+    if (communityMood === null) return null;
+    if (communityMood <= 3.5) {
+      return { emoji: "☁️", label: "Không gian này đang khá trầm lắng — một tia sáng từ bạn có thể rất ý nghĩa" };
+    }
+    if (communityMood <= 6.5) {
+      return { emoji: "⛅", label: "Cảm xúc chung ở đây khá cân bằng lúc này" };
+    }
+    return { emoji: "☀️", label: "Không gian này đang nhẹ nhàng và ấm áp" };
+  }, [communityMood]);
+
+  // Bụi nền trang trí — tách 2 lớp cố định (xa/gần), MỖI LỚP chỉ 1 phép
+  // biến đổi dùng chung, thay vì 80 phép biến đổi riêng lẻ như trước.
+  const dustFar = useMemo(() => generateDust(26, "far"), []);
+  const dustNear = useMemo(() => generateDust(24, "near"), []);
+
+  function handleTap(story: Story) {
+    setOpenStory(story);
     if (soundEnabled) playOpenSignal();
   }
 
-  function handleMouseMove(e: React.MouseEvent) {
-    // Optionally keep mouse parallax for background layers if needed,
-    // but the main effect is now drag-based 3D parallax.
-  }
-
-  // Wrapper cho từng tín hiệu để tạo hiệu ứng 3D Parallax
-  const ParallaxSignal = ({ signal, idx, isEncouraged }: { signal: Signal; idx: number; isEncouraged: boolean }) => {
-    // Tính toán độ sâu (depth) ảo dựa trên ID để tạo layer 3D
-    const depth = useMemo(() => {
-      let hash = 0;
-      for (let i = 0; i < signal.id.length; i++) hash = signal.id.charCodeAt(i) + ((hash << 5) - hash);
-      return (Math.abs(hash) % 100) / 100; // Giá trị 0 -> 1
-    }, [signal.id]);
-
-    // Các object ở xa (depth thấp) sẽ di chuyển ngược lại nhẹ để giảm tốc độ drag
-    // Các object ở gần (depth cao) sẽ di chuyển nhanh hơn
-    // springX, springY chính là vị trí drag hiện tại
-    const offsetX = useTransform(springX, v => v * (depth - 0.5) * 1.5);
-    const offsetY = useTransform(springY, v => v * (depth - 0.5) * 1.5);
-    
-    // Scale object dựa theo độ sâu để tạo cảm giác gần/xa
-    const scale = 0.7 + depth * 0.6;
-
-    return (
-      <motion.div
-        key={signal.id}
-        initial={{ opacity: 0, scale: 0 }}
-        animate={{ opacity: 1, scale: scale }}
-        exit={{ opacity: 0, scale: 0 }}
-        transition={{
-          delay: showIntro ? 3.5 + idx * 0.06 : idx * 0.04,
-          type: "spring",
-          stiffness: 200,
-          damping: 20,
-        }}
-        style={{ x: offsetX, y: offsetY, zIndex: Math.floor(depth * 100) + 20 }}
-        className="absolute inset-0 pointer-events-none" // Wrapper full màn hình nhưng KHÔNG chặn sự kiện vì pointer-events-none
-      >
-        <SignalOrb
-          signal={signal}
-          onTap={handleTap}
-          isEncouraged={isEncouraged}
-        />
-      </motion.div>
-    );
-  };
-
   const Canvas = isSky ? SkyCanvas : OceanCanvas;
+  const worldWidthPx = viewportSize.width * WORLD_SCALE;
+  const worldHeightPx = viewportSize.height * WORLD_SCALE;
+  // Khoảng cách kéo tối đa để chạm được rìa thế giới ảo ở mỗi trục —
+  // (kích thước thế giới - khung nhìn) / 2, tính động theo màn hình thật.
+  const dragRangeX = (worldWidthPx - viewportSize.width) / 2;
+  const dragRangeY = (worldHeightPx - viewportSize.height) / 2;
 
   return (
     <Canvas mouseX={springX} mouseY={springY}>
-      <div
-        className="relative flex h-dvh w-full flex-col overflow-hidden"
-        onMouseMove={handleMouseMove}
-      >
+      <div className="relative flex h-dvh w-full flex-col overflow-hidden">
         {/* ======================================================
             INTRO OVERLAY — Dramatic entrance (auto-dismiss 3.5s)
             ====================================================== */}
@@ -301,7 +349,8 @@ export default function ExplorePage() {
               </button>
             </div>
 
-            {/* Right — Sound + History */}
+            {/* Right — Sound + Dashboard + Library + Notifications + Settings
+                (Bản đồ đã chuyển sang góc trái màn hình, xem bên dưới) */}
             <div className="flex items-center gap-1.5">
               <button
                 aria-label={soundEnabled ? "Tắt âm thanh" : "Bật âm thanh"}
@@ -312,14 +361,45 @@ export default function ExplorePage() {
                 {soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
               </button>
               <Link
-                href="/history"
-                aria-label="Lịch sử"
+                href="/dashboard"
+                aria-label="Dashboard cá nhân"
                 className="rounded-lg bg-white/[0.04] p-2 text-base-text-secondary/50 hover:bg-white/8 hover:text-base-text-secondary transition-colors"
               >
                 <History size={14} />
               </Link>
+              <Link
+                href="/library"
+                aria-label="Thư viện kiến thức"
+                className="rounded-lg bg-white/[0.04] p-2 text-base-text-secondary/50 hover:bg-white/8 hover:text-base-text-secondary transition-colors"
+              >
+                <BookOpen size={14} />
+              </Link>
+              <NotificationBell />
+              <Link
+                href="/settings"
+                aria-label="Cài đặt"
+                className="rounded-lg bg-white/[0.04] p-2 text-base-text-secondary/50 hover:bg-white/8 hover:text-base-text-secondary transition-colors"
+              >
+                <Settings size={14} />
+              </Link>
             </div>
           </div>
+
+          {/* Chỉ báo chế độ "chỉ lắng nghe" — Module 2.2 browse-only mode */}
+          <AnimatePresence>
+            {listenOnly && !showIntro && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                className="mx-auto mt-2 flex max-w-3xl justify-center"
+              >
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-black/30 px-3 py-1 text-[10px] text-base-text-secondary/60">
+                  <Headphones size={11} /> Đang ở chế độ chỉ lắng nghe — chưa thả câu chuyện nào
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.header>
 
         {/* ======================================================
@@ -346,95 +426,135 @@ export default function ExplorePage() {
               </motion.p>
             </AnimatePresence>
           </div>
+
+          {/* Community mood pulse — tổng hợp ẩn danh, không lộ cá nhân (4.3) */}
+          {communityMoodMeta && (
+            <p className="mt-1.5 text-[10px] text-base-text-secondary/35">
+              {communityMoodMeta.emoji} {communityMoodMeta.label}
+            </p>
+          )}
         </motion.div>
 
         {/* ======================================================
-            DRAGGABLE SPACE CANVAS — signals floating
+            DRAGGABLE SPACE CANVAS — stories floating
             ====================================================== */}
-        <div
-          ref={containerRef}
-          className="relative flex-1 w-full overflow-hidden z-10"
-        >
+        <div ref={containerRef} className="relative flex-1 w-full overflow-hidden z-10">
+          {/* Bản đồ không gian — cố định góc TRÁI màn hình, giống vị trí
+              quen thuộc của phiên bản trước, luôn hiển thị thường trực */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: showIntro ? 0 : 1 }}
+            transition={{ delay: 0.4, duration: 0.4 }}
+            className="pointer-events-none absolute bottom-4 left-4 z-30 md:bottom-5 md:left-5"
+          >
+            <SpaceMap
+              stories={visible}
+              dragX={dragX}
+              dragY={dragY}
+              dragRangeX={dragRangeX}
+              dragRangeY={dragRangeY}
+              worldWidthPx={worldWidthPx}
+              worldHeightPx={worldHeightPx}
+              viewportWidthPx={viewportSize.width}
+              viewportHeightPx={viewportSize.height}
+              isSky={isSky}
+              encouragedStoryIds={encouragedStoryIds}
+            />
+          </motion.div>
+
           <motion.div
             drag
-            dragConstraints={{ left: -1800, right: 1800, top: -1800, bottom: 1800 }}
-            dragElastic={0.25}
-            initial={{ x: -600, y: -600 }}
-            className="absolute w-[300%] h-[300%] cursor-grab active:cursor-grabbing origin-center"
-            style={{
-              touchAction: "none",
-              x: dragX,
-              y: dragY,
-            }}
+            dragConstraints={{ left: -dragRangeX, right: dragRangeX, top: -dragRangeY, bottom: dragRangeY }}
+            dragElastic={0.1}
+            dragTransition={{ power: 0.25, timeConstant: 220, restDelta: 0.5 }}
+            className="absolute w-[700%] h-[700%] cursor-grab active:cursor-grabbing origin-center"
+            style={{ touchAction: "none", x: dragX, y: dragY }}
           >
-            {/* Thêm một lớp tinh vân nền trôi nhẹ khi drag */}
-            <motion.div 
+            {/* Nền tinh vân trôi nhẹ — tĩnh, không gắn theo drag để tránh chi phí thêm */}
+            <div
               className="absolute inset-0 pointer-events-none opacity-40 blur-[80px]"
               style={{
-                background: isSky 
-                  ? "radial-gradient(circle at 50% 50%, rgba(162,119,255,0.15) 0%, transparent 60%)" 
-                  : "radial-gradient(circle at 50% 50%, rgba(79,209,197,0.1) 0%, transparent 60%)"
+                background: isSky
+                  ? "radial-gradient(circle at 50% 50%, rgba(162,119,255,0.15) 0%, transparent 60%)"
+                  : "radial-gradient(circle at 50% 50%, rgba(79,209,197,0.1) 0%, transparent 60%)",
               }}
             />
 
-            {/* Ambient decorative elements inside the draggable galaxy/ocean */}
-            {ambientElements.map((el, i) => {
-              const offsetX = useTransform(springX, (v) => v * (el.depth - 0.5) * 1.3);
-              const offsetY = useTransform(springY, (v) => v * (el.depth - 0.5) * 1.3);
-              
-              if (isSky) {
-                return (
-                  <motion.span
-                    key={el.id}
-                    className="absolute rounded-full pointer-events-none"
-                    style={{
-                      top: `${el.y}%`,
-                      left: `${el.x}%`,
-                      width: el.size * 0.8,
-                      height: el.size * 0.8,
-                      x: offsetX,
-                      y: offsetY,
-                      opacity: el.opacity,
-                      background: i % 3 === 0 ? "#A8C8FF" : i % 5 === 0 ? "#F5D67D" : "#FFFFFF",
-                      boxShadow: el.size > 5 ? "0 0 6px rgba(255,255,255,0.4)" : "none",
-                      animation: `twinkle ${el.twinkleSpeed}s ease-in-out infinite`,
-                    }}
-                  />
-                );
-              } else {
-                return (
-                  <motion.span
-                    key={el.id}
-                    className="absolute rounded-full pointer-events-none"
-                    style={{
-                      top: `${el.y}%`,
-                      left: `${el.x}%`,
-                      width: el.size * 1.2,
-                      height: el.size * 1.2,
-                      x: offsetX,
-                      y: offsetY,
-                      opacity: el.opacity,
-                      background: "radial-gradient(circle at 35% 30%, rgba(184,233,224,0.3) 0%, rgba(79,209,197,0.05) 70%)",
-                      border: "0.8px solid rgba(184,233,224,0.18)",
-                      boxShadow: "inset 0 0 3px rgba(255,255,255,0.1)",
-                      animation: `twinkle ${el.twinkleSpeed}s ease-in-out infinite`,
-                    }}
-                  />
-                );
-              }
-            })}
+            {/* Lớp bụi nền XA — 1 phép biến đổi dùng chung cho cả lớp */}
+            <motion.div className="absolute inset-0 pointer-events-none" style={{ x: farX, y: farY }}>
+              {dustFar.map((el) => (
+                <span
+                  key={el.id}
+                  className="absolute rounded-full animate-twinkle"
+                  style={{
+                    top: `${el.y}%`,
+                    left: `${el.x}%`,
+                    width: el.size * 0.7,
+                    height: el.size * 0.7,
+                    opacity: el.opacity * 0.7,
+                    background: isSky ? "#A8C8FF" : "#7FE4DC",
+                    animationDuration: `${el.twinkleSpeed}s`,
+                  }}
+                />
+              ))}
+            </motion.div>
 
+            {/* Lớp bụi nền GẦN — 1 phép biến đổi dùng chung cho cả lớp */}
+            <motion.div className="absolute inset-0 pointer-events-none" style={{ x: nearX, y: nearY }}>
+              {dustNear.map((el) => (
+                <span
+                  key={el.id}
+                  className="absolute rounded-full animate-twinkle"
+                  style={{
+                    top: `${el.y}%`,
+                    left: `${el.x}%`,
+                    width: el.size,
+                    height: el.size,
+                    opacity: el.opacity,
+                    background: isSky ? "#FFFFFF" : "#B8E9E0",
+                    boxShadow: el.size > 4 ? "0 0 6px rgba(255,255,255,0.35)" : "none",
+                    animationDuration: `${el.twinkleSpeed}s`,
+                  }}
+                />
+              ))}
+            </motion.div>
+
+            {/* Câu chuyện — vị trí CỐ ĐỊNH trong thế giới ảo, không gắn thêm
+                phép biến đổi nào khác (đây chính là nguồn gây ra hiện tượng
+                "tự xoay"/lắc trước đây: mỗi orb có một offset riêng theo lò
+                xo trễ khác nhau, xung đột với chuyển động của cả khung kéo). */}
             <AnimatePresence>
               {visible.map((s, i) => (
-                <ParallaxSignal
+                <motion.div
                   key={s.id}
-                  signal={s}
-                  idx={i}
-                  isEncouraged={encouragedSignalIds.includes(s.id)}
-                />
+                  initial={{ opacity: 0, scale: 0 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0 }}
+                  transition={{
+                    delay: showIntro ? 3.5 + i * 0.06 : i * 0.04,
+                    type: "spring",
+                    stiffness: 220,
+                    damping: 22,
+                  }}
+                >
+                  <SignalOrb
+                    signal={s}
+                    onTap={handleTap}
+                    isEncouraged={encouragedStoryIds.includes(s.id)}
+                  />
+                </motion.div>
               ))}
             </AnimatePresence>
           </motion.div>
+
+          {/* Vignette bí ẩn — làm tối nhẹ 4 góc để thu hút ánh nhìn vào giữa
+              và gợi cảm giác "còn nhiều điều chưa khám phá ở rìa xa" */}
+          <div
+            className="pointer-events-none absolute inset-0 z-20"
+            style={{
+              background: "radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.4) 100%)",
+            }}
+          />
 
           {/* Depth hint — subtle edge gradients */}
           <div
@@ -483,7 +603,10 @@ export default function ExplorePage() {
             </motion.p>
           </div>
 
-          {/* Floating Action Button */}
+          {/* Floating Action Button — Module 2.2: luôn dẫn về /write (mood đã
+              có sẵn từ /checkin), không bắt user check-in lại từ đầu. Khi
+              đang ở chế độ "chỉ lắng nghe", đổi lời mời cho tha thiết hơn
+              một chút để khuyến khích quay lại chia sẻ. */}
           <div className="flex justify-center pointer-events-none">
             <motion.div
               initial={{ y: 20, scale: 0.9 }}
@@ -514,7 +637,7 @@ export default function ExplorePage() {
               />
 
               <Link
-                href="/checkin"
+                href="/write"
                 className={clsx(
                   "relative flex items-center gap-2 rounded-full px-7 py-3.5 text-sm font-bold text-white transition-all duration-300 hover:scale-105 active:scale-95"
                 )}
@@ -528,7 +651,7 @@ export default function ExplorePage() {
                 }}
               >
                 <Plus size={16} />
-                Chia sẻ tâm sự
+                {listenOnly ? "Đổi ý rồi, mình muốn chia sẻ" : "Chia sẻ tâm sự"}
               </Link>
             </motion.div>
           </div>
@@ -536,10 +659,10 @@ export default function ExplorePage() {
       </div>
 
       {/* ======================================================
-          BOTTOM SHEET — Signal detail card
+          BOTTOM SHEET — Story detail card
           ====================================================== */}
-      <BottomSheet open={openSignal !== null} onClose={() => setOpenSignal(null)}>
-        {openSignal && <SignalCard signal={openSignal} />}
+      <BottomSheet open={openStory !== null} onClose={() => setOpenStory(null)}>
+        {openStory && <SignalCard signal={openStory} />}
       </BottomSheet>
     </Canvas>
   );

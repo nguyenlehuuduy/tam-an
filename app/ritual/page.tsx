@@ -8,7 +8,12 @@ import { OceanCanvas } from "@/components/canvas/OceanCanvas";
 import { ReleaseGesture } from "@/components/release/ReleaseGesture";
 import { HotlineBanner } from "@/components/ui/HotlineBanner";
 import { Button } from "@/components/ui/Button";
+import Link from "next/link";
 import { useAppState } from "@/context/AppStateContext";
+import { useLanguage } from "@/context/LanguageContext";
+import { suggestArticlesForMood, getArticleTranslation, LibraryArticle } from "@/lib/libraryContent";
+import { BookOpen } from "lucide-react";
+import { StoryType } from "@/lib/mockSignals";
 
 // =====================================================
 // THÔNG ĐIỆP TÍCH CỰC — xoay vòng mỗi 3 giây
@@ -30,11 +35,17 @@ const POSITIVE_MESSAGES = [
 export default function RitualPage() {
   const router = useRouter();
   const { draft, releaseDraft } = useAppState();
+  const { language } = useLanguage();
   const [phase, setPhase] = useState<"hold" | "released">("hold");
   const [highRisk, setHighRisk] = useState(false);
+  const [lowMoodArticles, setLowMoodArticles] = useState<LibraryArticle[]>([]);
   const [msgIdx, setMsgIdx] = useState(0);
 
   const [savedType] = useState(draft.type);
+  // Loại THẬT SỰ sau khi thả — quyết định bởi hướng kéo (lên = bầu trời,
+  // xuống = đại dương), có thể khác với lựa chọn ban đầu ở /write. null
+  // nghĩa là chưa thả, vẫn đang ở phase "hold".
+  const [finalType, setFinalType] = useState<StoryType | null>(null);
 
   // Redirect nếu không có draft
   useEffect(() => {
@@ -53,16 +64,29 @@ export default function RitualPage() {
 
   if (!savedType) return null;
 
-  const Canvas = savedType === "star" ? SkyCanvas : OceanCanvas;
-  const isStar = savedType === "star";
+  // Trước khi thả: nền vẫn theo lựa chọn ban đầu ở /write. Ngay khi thả
+  // xong, nền chuyển tới đúng không gian mà hướng kéo đã chọn — "kéo
+  // xuống thì load đại dương, kéo lên thì load bầu trời".
+  const displayType = finalType ?? savedType;
+  const Canvas = displayType === "star" ? SkyCanvas : OceanCanvas;
+  const isStar = displayType === "star";
 
-  function handleReleased() {
-    const result = releaseDraft();
-    setHighRisk(Boolean(result?.highRisk));
+  function handleReleased(releasedType: StoryType) {
+    setFinalType(releasedType);
+    const result = releaseDraft(releasedType);
+    const isHighRisk = Boolean(result?.highRisk);
+    const mood = result?.story.moodAtRelease ?? null;
+    // Module 5.3 — "sau khi release story mood thấp → gợi ý 1-2 bài liên
+    // quan (không intrusive)". Chỉ áp dụng khi không phải highRisk (màn
+    // highRisk đã ưu tiên hotline banner, tránh dồn quá nhiều thứ cùng lúc).
+    const isLowMood = !isHighRisk && mood !== null && mood <= 3;
+    setHighRisk(isHighRisk);
+    setLowMoodArticles(isLowMood ? suggestArticlesForMood(mood, 2) : []);
     setPhase("released");
 
-    // Không highRisk → redirect thẳng /explore sau 2s
-    if (!result?.highRisk) {
+    // Không highRisk và mood không thấp → redirect thẳng /explore sau 2s.
+    // Nếu mood thấp, dừng lại một nhịp để gợi ý bài viết trước khi tiếp tục.
+    if (!isHighRisk && !isLowMood) {
       setTimeout(() => router.push("/explore"), 2000);
     }
   }
@@ -114,16 +138,17 @@ export default function RitualPage() {
                   className="text-center"
                 >
                   <p className="text-xs font-semibold uppercase tracking-[0.25em] text-base-text-secondary/40 mb-2">
-                    {isStar ? "bầu trời đang chờ" : "đại dương đang lắng nghe"}
+                    bầu trời và đại dương đều đang chờ
                   </p>
                   <p className="text-sm text-base-text-secondary/60">
-                    {isStar
-                      ? "Vuốt ngôi sao lên — để nó bay đi"
-                      : "Vuốt bong bóng xuống — để nó chìm sâu"}
+                    Vuốt lên để hoá thành sao bay lên bầu trời,{" "}
+                    <br className="hidden sm:block" />
+                    hoặc vuốt xuống để hoá thành bong bóng chìm xuống đại dương
                   </p>
                 </motion.div>
 
-                {/* Gesture widget */}
+                {/* Gesture widget — hướng kéo quyết định đích đến, không
+                    còn bị khoá cứng theo lựa chọn ban đầu ở /write nữa */}
                 <ReleaseGesture type={savedType} onReleased={handleReleased} />
 
                 {/* Subtle pulsing hint */}
@@ -132,7 +157,7 @@ export default function RitualPage() {
                   transition={{ duration: 2, repeat: Infinity }}
                   className="text-[11px] text-base-text-secondary/40"
                 >
-                  {isStar ? "↑ vuốt lên" : "↓ vuốt xuống"}
+                  ↑ bầu trời &nbsp;·&nbsp; đại dương ↓
                 </motion.p>
               </motion.div>
             ) : (
@@ -190,7 +215,7 @@ export default function RitualPage() {
                 </motion.p>
 
                 {/* Auto-redirect indicator */}
-                {!highRisk && (
+                {!highRisk && lowMoodArticles.length === 0 && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -215,6 +240,49 @@ export default function RitualPage() {
                     <p className="text-[10px] text-base-text-secondary/40">
                       Đang đưa bạn đến không gian...
                     </p>
+                  </motion.div>
+                )}
+
+                {/* Mood thấp (không highRisk): gợi ý nhẹ 1-2 bài từ Thư viện — spec 5.3 */}
+                {lowMoodArticles.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6 }}
+                    className="mt-6 w-full text-left"
+                  >
+                    <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-base-text-secondary/40 flex items-center gap-1.5">
+                      <BookOpen size={12} /> Có thể sẽ hữu ích với bạn lúc này
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      {lowMoodArticles.map((a) => {
+                        const tr = getArticleTranslation(a, language);
+                        return (
+                          <Link
+                            key={a.slug}
+                            href={`/library/${a.slug}`}
+                            className="flex items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3 hover:bg-white/[0.07] hover:border-white/15 transition-all"
+                          >
+                            <span
+                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg"
+                              style={{ background: a.coverGradient }}
+                            >
+                              {a.coverEmoji}
+                            </span>
+                            <span className="text-[12.5px] font-semibold text-base-text-primary leading-snug">
+                              {tr.title}
+                            </span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                    <Button
+                      accent={isStar ? "sky" : "ocean"}
+                      onClick={() => router.push("/explore")}
+                      className="mt-4 w-full font-bold"
+                    >
+                      Khám phá không gian →
+                    </Button>
                   </motion.div>
                 )}
 
