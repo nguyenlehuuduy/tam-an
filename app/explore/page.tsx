@@ -5,7 +5,6 @@ import {
   useState,
   useRef,
   useEffect,
-  useCallback,
   Suspense,
 } from "react";
 import Link from "next/link";
@@ -15,6 +14,7 @@ import {
   AnimatePresence,
   useMotionValue,
   useSpring,
+  useTransform,
   animate,
 } from "framer-motion";
 import {
@@ -27,6 +27,7 @@ import {
   Headphones,
   Settings,
   BookOpen,
+  Waves,
 } from "lucide-react";
 import clsx from "clsx";
 import { SkyCanvas } from "@/components/canvas/SkyCanvas";
@@ -157,95 +158,6 @@ export default function ExplorePage() {
   const whispers = isSky ? SKY_WHISPERS : OCEAN_WHISPERS;
   const stats = STATS_DATA[space];
 
-  // =====================================================
-  // SMOOTH POINTER DRAG ENGINE
-  // Uses raw pointer events for zero-lag panning.
-  // No framer-motion drag — avoids re-render jank.
-  // =====================================================
-  const canvasRef = useRef<HTMLDivElement>(null);
-  const isDragging = useRef(false);
-  const lastPos = useRef({ x: 0, y: 0 });
-  const velocity = useRef({ x: 0, y: 0 });
-  const inertiaFrame = useRef<number | null>(null);
-
-  // MotionValues hold the canvas offset
-  const rawX = useMotionValue(0);
-  const rawY = useMotionValue(0);
-  // Smooth spring layer for parallax backgrounds
-  const springX = useSpring(rawX, { stiffness: 80, damping: 22 });
-  const springY = useSpring(rawY, { stiffness: 80, damping: 22 });
-
-  // Canvas boundaries: canvas is CANVAS_SCALE times the viewport
-  const getBounds = useCallback(() => {
-    const { w, h } = windowSize;
-    const maxX = 0;
-    const minX = -(w * (CANVAS_SCALE - 1));
-    const maxY = 0;
-    const minY = -(h * (CANVAS_SCALE - 1));
-    return { minX, maxX, minY, maxY };
-  }, [windowSize]);
-
-  function clamp(val: number, min: number, max: number) {
-    return Math.max(min, Math.min(max, val));
-  }
-
-  const applyInertia = useCallback(() => {
-    velocity.current.x *= 0.93;
-    velocity.current.y *= 0.93;
-    const bounds = getBounds();
-    rawX.set(clamp(rawX.get() + velocity.current.x, bounds.minX, bounds.maxX));
-    rawY.set(clamp(rawY.get() + velocity.current.y, bounds.minY, bounds.maxY));
-    if (Math.abs(velocity.current.x) > 0.3 || Math.abs(velocity.current.y) > 0.3) {
-      inertiaFrame.current = requestAnimationFrame(applyInertia);
-    }
-  }, [getBounds, rawX, rawY]);
-
-  const onPointerDown = useCallback((e: React.PointerEvent) => {
-    // Ignore if clicking on a signal orb (pointer-events-auto children)
-    if ((e.target as HTMLElement).closest("[data-signal-orb]")) return;
-    isDragging.current = true;
-    lastPos.current = { x: e.clientX, y: e.clientY };
-    velocity.current = { x: 0, y: 0 };
-    if (inertiaFrame.current) cancelAnimationFrame(inertiaFrame.current);
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }, [inertiaFrame]);
-
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDragging.current) return;
-    const dx = e.clientX - lastPos.current.x;
-    const dy = e.clientY - lastPos.current.y;
-    lastPos.current = { x: e.clientX, y: e.clientY };
-    velocity.current = { x: dx, y: dy };
-    const bounds = getBounds();
-    rawX.set(clamp(rawX.get() + dx, bounds.minX, bounds.maxX));
-    rawY.set(clamp(rawY.get() + dy, bounds.minY, bounds.maxY));
-  }, [getBounds, rawX, rawY]);
-
-  const onPointerUp = useCallback(() => {
-    if (!isDragging.current) return;
-    isDragging.current = false;
-    inertiaFrame.current = requestAnimationFrame(applyInertia);
-  }, [applyInertia]);
-
-  // Teleport (from mini-map click)
-  function handleTeleport(tx: number, ty: number) {
-    const bounds = getBounds();
-    const cx = clamp(tx, bounds.minX, bounds.maxX);
-    const cy = clamp(ty, bounds.minY, bounds.maxY);
-    animate(rawX, cx, { type: "spring", stiffness: 150, damping: 25 });
-    animate(rawY, cy, { type: "spring", stiffness: 150, damping: 25 });
-  }
-
-  // Update window size on mount / resize
-  useEffect(() => {
-    function update() {
-      setWindowSize({ w: window.innerWidth, h: window.innerHeight });
-    }
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, []);
-
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
@@ -322,10 +234,6 @@ export default function ExplorePage() {
   // (kích thước thế giới - khung nhìn) / 2, tính động theo màn hình thật.
   const dragRangeX = (worldWidthPx - viewportSize.width) / 2;
   const dragRangeY = (worldHeightPx - viewportSize.height) / 2;
-
-  // Canvas pixel dimensions
-  const canvasW = windowSize.w * CANVAS_SCALE;
-  const canvasH = windowSize.h * CANVAS_SCALE;
 
   return (
     <Canvas mouseX={springX} mouseY={springY}>
