@@ -1,4 +1,4 @@
-# Trạm Phát Sáng — MVP prototype
+# Solace – Nơi nỗi lòng được cất giữ (MVP prototype)
 
 Web app Next.js (App Router + TypeScript + Tailwind) triển khai đúng luồng 5 bước
 và hệ thống thiết kế mô tả trong "Đặc tả thiết kế & triển khai sản phẩm chi tiết".
@@ -38,9 +38,10 @@ Mở http://localhost:3000 — sẽ tự chuyển vào Bước 1 (Check-in).
 
 ## Chưa làm / đơn giản hoá có chủ đích (đúng phạm vi MVP)
 
-- **Chưa nối Supabase** — toàn bộ dữ liệu là mock (`lib/mockSignals.ts`) + những gì
-  bạn tự thả trong phiên hiện tại (lưu tạm ở `localStorage`, mất khi xoá trình duyệt).
-  Xem phần "Nối Supabase thật" bên dưới.
+- **Supabase đã có schema + đã nối một phần** (`stories`, `reactions`) — xem
+  `supabase/BACKEND_INTEGRATION.md`. Dữ liệu mẫu (`lib/mockSignals.ts`) + dữ liệu thật
+  từ Supabase (nếu đã cấu hình `.env.local`) được BỔ SUNG cho nhau, không thay thế.
+  Đăng nhập (magic link) vẫn đang mô phỏng, chưa nối Supabase Auth thật.
 - Cử chỉ pan/pinch để "khám phá không gian" ở Bước 4 chưa làm — hiện tại là một
   không gian tĩnh với các lớp nền trôi nhẹ (parallax nền), người dùng chạm trực tiếp
   vào từng sao/bong bóng. Có thể bổ sung sau bằng `framer-motion`'s `drag` trên toàn
@@ -53,14 +54,14 @@ Mở http://localhost:3000 — sẽ tự chuyển vào Bước 1 (Check-in).
 
 ## Nối Supabase thật
 
-1. Tạo project Supabase, lấy `NEXT_PUBLIC_SUPABASE_URL` và `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-2. Tạo bảng theo mô hình dữ liệu ở mục A17 (`anonymous_users`, `signals`, `reactions`,
-   `moderation_flags`, `hotline_events`).
-3. Thêm `lib/supabase/client.ts` (dùng `@supabase/supabase-js`), thay các hàm trong
-   `context/AppStateContext.tsx` (`releaseDraft`, `sendReaction`, danh sách `signals`)
-   bằng query/insert Supabase thay vì mảng mock + localStorage.
-4. Thay `lib/moderation.ts` bằng gọi API kiểm duyệt thật (bộ lọc từ khoá + API mô hình
-   ngôn ngữ, theo mục 6.1 báo cáo gốc), chạy phía server (route handler) thay vì client.
+Xem hướng dẫn đầy đủ, từng bước ở `supabase/BACKEND_INTEGRATION.md` và schema ở
+`supabase/schema.sql`. Tóm tắt: tạo project Supabase → chạy `schema.sql` trong SQL
+Editor → thêm `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` vào
+`.env.local` → `npm install` → `npm run dev`. `lib/supabaseClient.ts` và
+`lib/storiesApi.ts` đã sẵn sàng; `releaseDraft`/`sendReaction` trong
+`context/AppStateContext.tsx` đã lưu thật lên Supabase, tự lùi về localStorage nếu lỗi.
+Kiểm duyệt nội dung (`lib/moderation.ts`) vẫn là so khớp từ khoá — cần thay bằng API
+kiểm duyệt thật trước khi ra mắt (xem tài liệu dự án mục 5.2.1).
 
 ## Cấu trúc thư mục
 

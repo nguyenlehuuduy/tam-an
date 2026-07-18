@@ -114,3 +114,108 @@ export function playOpenSignal() {
   playTone(329.63, now, 0.5, 0.035, "sine");
   playTone(493.88, now + 0.05, 0.3, 0.015, "sine");
 }
+
+// =====================================================
+// ÂM THANH NỀN (AMBIENT LOOP) — gió xa cho Sky, sóng vỗ nhẹ cho Ocean.
+// Trước đây /explore hoàn toàn im lặng trừ lúc có hành động cụ thể (mở
+// signal, gửi tia sáng...) — một không gian chữa lành thật sự nên có một
+// lớp âm thanh nền cực khẽ, liên tục, để cảm giác "có sự sống" thay vì
+// một khoảng trống vô thanh. Dùng noise qua bộ lọc + LFO biến điệu cực
+// chậm (không cần file âm thanh ngoài, giống các hiệu ứng khác trong file
+// này) — âm lượng rất thấp (0.02-0.025), không được lấn át giọng nói hay
+// các hiệu ứng tương tác khác.
+// =====================================================
+let ambientNoiseSource: AudioBufferSourceNode | null = null;
+let ambientFilter: BiquadFilterNode | null = null;
+let ambientLFO: OscillatorNode | null = null;
+let ambientGain: GainNode | null = null;
+let ambientActive: "sky" | "ocean" | null = null;
+
+function makeNoiseBuffer(audio: AudioContext): AudioBuffer {
+  const bufferSize = audio.sampleRate * 2;
+  const buffer = audio.createBuffer(1, bufferSize, audio.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+  return buffer;
+}
+
+/** Bắt đầu (hoặc chuyển đổi) âm thanh nền theo không gian hiện tại. Gọi lại
+ * an toàn nhiều lần — tự bỏ qua nếu đã đang phát đúng loại rồi. */
+export function startAmbient(kind: "sky" | "ocean") {
+  const audio = getContext();
+  if (!audio) return;
+  if (ambientActive === kind) return;
+  stopAmbient();
+
+  const gain = audio.createGain();
+  gain.gain.setValueAtTime(0.0001, audio.currentTime);
+  gain.gain.linearRampToValueAtTime(kind === "sky" ? 0.018 : 0.022, audio.currentTime + 1.8);
+  gain.connect(audio.destination);
+
+  const noise = audio.createBufferSource();
+  noise.buffer = makeNoiseBuffer(audio);
+  noise.loop = true;
+
+  const filter = audio.createBiquadFilter();
+  const lfo = audio.createOscillator();
+  const lfoGain = audio.createGain();
+
+  if (kind === "sky") {
+    // Gió xa — lowpass mở/khép rất chậm, gợi cảm giác trống trải ấm áp.
+    filter.type = "lowpass";
+    filter.frequency.value = 380;
+    filter.Q.value = 0.6;
+    lfo.frequency.value = 0.06;
+    lfoGain.gain.value = 140;
+  } else {
+    // Sóng vỗ nhẹ — bandpass trầm hơn, biến điệu như nhịp thở của biển.
+    filter.type = "bandpass";
+    filter.frequency.value = 220;
+    filter.Q.value = 0.9;
+    lfo.frequency.value = 0.045;
+    lfoGain.gain.value = 90;
+  }
+
+  lfo.connect(lfoGain);
+  lfoGain.connect(filter.frequency);
+  lfo.start();
+
+  noise.connect(filter);
+  filter.connect(gain);
+  noise.start();
+
+  ambientNoiseSource = noise;
+  ambientFilter = filter;
+  ambientLFO = lfo;
+  ambientGain = gain;
+  ambientActive = kind;
+}
+
+/** Tắt âm thanh nền (fade-out mềm, không cắt đột ngột) — an toàn khi gọi
+ * kể cả lúc chưa có gì đang phát. */
+export function stopAmbient() {
+  if (ambientGain && ctx) {
+    try {
+      const now = ctx.currentTime;
+      ambientGain.gain.cancelScheduledValues(now);
+      ambientGain.gain.setValueAtTime(ambientGain.gain.value, now);
+      ambientGain.gain.linearRampToValueAtTime(0.0001, now + 0.8);
+    } catch {
+      // ignore
+    }
+  }
+  const stopAt = (ctx?.currentTime ?? 0) + 0.9;
+  [ambientNoiseSource, ambientLFO].forEach((node) => {
+    if (!node) return;
+    try {
+      node.stop(stopAt);
+    } catch {
+      // ignore — node có thể đã dừng sẵn
+    }
+  });
+  ambientNoiseSource = null;
+  ambientFilter = null;
+  ambientLFO = null;
+  ambientGain = null;
+  ambientActive = null;
+}

@@ -117,13 +117,13 @@ export default function SettingsPage() {
     if (!ok) return;
     try {
       [
-        "tram-phat-sang:v2",
-        "tram-phat-sang:all-signals",
-        "tram-phat-sang:auth",
-        "tram-phat-sang:notifications",
-        "tram-phat-sang:feedback-nudge-dismissed",
-        "tram-phat-sang:feedback-submissions",
-        "tram-phat-sang:lang",
+        "solace:v2",
+        "solace:all-signals",
+        "solace:auth",
+        "solace:notifications",
+        "solace:feedback-nudge-dismissed",
+        "solace:feedback-submissions",
+        "solace:lang",
       ].forEach((k) => window.localStorage.removeItem(k));
     } catch {
       // ignore
@@ -136,7 +136,7 @@ export default function SettingsPage() {
     {
       key: "privacy",
       label: t("settings.about.privacy"),
-      body: "Trạm Phát Sáng không thu thập thông tin định danh cá nhân. Toàn bộ câu chuyện, mood, và cài đặt của bạn hiện đang lưu trên chính thiết bị của bạn (localStorage) trong giai đoạn MVP này — chưa đồng bộ lên máy chủ.",
+      body: "Solace không thu thập thông tin định danh cá nhân. Toàn bộ câu chuyện, mood, và cài đặt của bạn hiện đang lưu trên chính thiết bị của bạn (localStorage) trong giai đoạn MVP này — chưa đồng bộ lên máy chủ.",
     },
     {
       key: "terms",

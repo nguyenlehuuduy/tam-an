@@ -31,7 +31,7 @@ const nunito = Nunito({
 });
 
 export const metadata: Metadata = {
-  title: "Trạm Phát Sáng",
+  title: "Solace – Nơi nỗi lòng được cất giữ",
   description:
     "Không gian ảo ẩn danh — viết ra điều đang nặng lòng, thả nó vào bầu trời hoặc đại dương, và nhận lại một tia sáng ấm áp.",
 };

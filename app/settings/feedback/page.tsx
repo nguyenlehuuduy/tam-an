@@ -22,7 +22,7 @@ type FeedbackCategory = "bug" | "feature" | "ux" | "content" | "other";
 
 const CATEGORY_ORDER: FeedbackCategory[] = ["bug", "feature", "ux", "content", "other"];
 
-const STORAGE_KEY = "tram-phat-sang:feedback-submissions";
+const STORAGE_KEY = "solace:feedback-submissions";
 
 interface FeedbackSubmission {
   id: string;
