@@ -1,8 +1,22 @@
 "use client";
 
-import { useMemo, useState, useRef, useEffect } from "react";
+import {
+  useMemo,
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  Suspense,
+} from "react";
 import Link from "next/link";
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
+import { useSearchParams } from "next/navigation";
+import {
+  motion,
+  AnimatePresence,
+  useMotionValue,
+  useSpring,
+  animate,
+} from "framer-motion";
 import {
   History,
   Plus,
@@ -30,7 +44,7 @@ import { playOpenSignal } from "@/lib/sound";
 type Space = "sky" | "ocean";
 
 // =====================================================
-// IMMERSIVE WHISPERS — xoay vòng tự động mỗi 4s
+// WHISPER TEXTS
 // =====================================================
 const SKY_WHISPERS = [
   "Mỗi ngôi sao là một câu chuyện ai đó đang giữ...",
@@ -48,7 +62,6 @@ const OCEAN_WHISPERS = [
   "Lắng nghe... biển đang kể chuyện, cứ lướt xa hơn xem",
 ];
 
-// Stats shown to create social presence
 const STATS_DATA = {
   sky: { count: 1247, label: "câu chuyện đang bay trên trời" },
   ocean: { count: 893, label: "bí mật đang chìm dưới biển" },
@@ -144,6 +157,95 @@ export default function ExplorePage() {
   const whispers = isSky ? SKY_WHISPERS : OCEAN_WHISPERS;
   const stats = STATS_DATA[space];
 
+  // =====================================================
+  // SMOOTH POINTER DRAG ENGINE
+  // Uses raw pointer events for zero-lag panning.
+  // No framer-motion drag — avoids re-render jank.
+  // =====================================================
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+  const lastPos = useRef({ x: 0, y: 0 });
+  const velocity = useRef({ x: 0, y: 0 });
+  const inertiaFrame = useRef<number | null>(null);
+
+  // MotionValues hold the canvas offset
+  const rawX = useMotionValue(0);
+  const rawY = useMotionValue(0);
+  // Smooth spring layer for parallax backgrounds
+  const springX = useSpring(rawX, { stiffness: 80, damping: 22 });
+  const springY = useSpring(rawY, { stiffness: 80, damping: 22 });
+
+  // Canvas boundaries: canvas is CANVAS_SCALE times the viewport
+  const getBounds = useCallback(() => {
+    const { w, h } = windowSize;
+    const maxX = 0;
+    const minX = -(w * (CANVAS_SCALE - 1));
+    const maxY = 0;
+    const minY = -(h * (CANVAS_SCALE - 1));
+    return { minX, maxX, minY, maxY };
+  }, [windowSize]);
+
+  function clamp(val: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, val));
+  }
+
+  const applyInertia = useCallback(() => {
+    velocity.current.x *= 0.93;
+    velocity.current.y *= 0.93;
+    const bounds = getBounds();
+    rawX.set(clamp(rawX.get() + velocity.current.x, bounds.minX, bounds.maxX));
+    rawY.set(clamp(rawY.get() + velocity.current.y, bounds.minY, bounds.maxY));
+    if (Math.abs(velocity.current.x) > 0.3 || Math.abs(velocity.current.y) > 0.3) {
+      inertiaFrame.current = requestAnimationFrame(applyInertia);
+    }
+  }, [getBounds, rawX, rawY]);
+
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    // Ignore if clicking on a signal orb (pointer-events-auto children)
+    if ((e.target as HTMLElement).closest("[data-signal-orb]")) return;
+    isDragging.current = true;
+    lastPos.current = { x: e.clientX, y: e.clientY };
+    velocity.current = { x: 0, y: 0 };
+    if (inertiaFrame.current) cancelAnimationFrame(inertiaFrame.current);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }, [inertiaFrame]);
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isDragging.current) return;
+    const dx = e.clientX - lastPos.current.x;
+    const dy = e.clientY - lastPos.current.y;
+    lastPos.current = { x: e.clientX, y: e.clientY };
+    velocity.current = { x: dx, y: dy };
+    const bounds = getBounds();
+    rawX.set(clamp(rawX.get() + dx, bounds.minX, bounds.maxX));
+    rawY.set(clamp(rawY.get() + dy, bounds.minY, bounds.maxY));
+  }, [getBounds, rawX, rawY]);
+
+  const onPointerUp = useCallback(() => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    inertiaFrame.current = requestAnimationFrame(applyInertia);
+  }, [applyInertia]);
+
+  // Teleport (from mini-map click)
+  function handleTeleport(tx: number, ty: number) {
+    const bounds = getBounds();
+    const cx = clamp(tx, bounds.minX, bounds.maxX);
+    const cy = clamp(ty, bounds.minY, bounds.maxY);
+    animate(rawX, cx, { type: "spring", stiffness: 150, damping: 25 });
+    animate(rawY, cy, { type: "spring", stiffness: 150, damping: 25 });
+  }
+
+  // Update window size on mount / resize
+  useEffect(() => {
+    function update() {
+      setWindowSize({ w: window.innerWidth, h: window.innerHeight });
+    }
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
@@ -160,13 +262,13 @@ export default function ExplorePage() {
     return () => clearInterval(t);
   }, [whispers.length]);
 
-  // Auto-dismiss intro after 3s
+  // Auto-dismiss intro after 3.5s
   useEffect(() => {
     const t = setTimeout(() => setShowIntro(false), 3500);
     return () => clearTimeout(t);
   }, []);
 
-  // Reset whisper index on space change
+  // Reset whisper on space change
   useEffect(() => {
     setWhisperIdx(0);
   }, [space]);
@@ -221,11 +323,15 @@ export default function ExplorePage() {
   const dragRangeX = (worldWidthPx - viewportSize.width) / 2;
   const dragRangeY = (worldHeightPx - viewportSize.height) / 2;
 
+  // Canvas pixel dimensions
+  const canvasW = windowSize.w * CANVAS_SCALE;
+  const canvasH = windowSize.h * CANVAS_SCALE;
+
   return (
     <Canvas mouseX={springX} mouseY={springY}>
       <div className="relative flex h-dvh w-full flex-col overflow-hidden">
         {/* ======================================================
-            INTRO OVERLAY — Dramatic entrance (auto-dismiss 3.5s)
+            INTRO OVERLAY
             ====================================================== */}
         <AnimatePresence>
           {showIntro && (
@@ -236,7 +342,9 @@ export default function ExplorePage() {
               transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
               className="absolute inset-0 z-50 flex flex-col items-center justify-center"
               style={{
-                background: "radial-gradient(ellipse at 50% 50%, rgba(6,10,19,0.95) 0%, rgba(6,10,19,0.99) 70%)",
+                background: isSky
+                  ? "radial-gradient(ellipse at 50% 50%, rgba(6,10,19,0.97) 0%, rgba(6,10,19,0.99) 70%)"
+                  : "radial-gradient(ellipse at 50% 60%, rgba(3,16,32,0.97) 0%, rgba(3,16,32,0.99) 70%)",
               }}
             >
               <motion.div
@@ -245,27 +353,45 @@ export default function ExplorePage() {
                 transition={{ delay: 0.2, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
                 className="text-center"
               >
+                {/* Icon */}
                 <motion.div
                   className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full"
-                  animate={{ boxShadow: [
-                    "0 0 30px rgba(162,119,255,0.4)",
-                    "0 0 70px rgba(162,119,255,0.6)",
-                    "0 0 30px rgba(162,119,255,0.4)",
-                  ]}}
-                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                  animate={{
+                    boxShadow: isSky
+                      ? [
+                          "0 0 30px rgba(162,119,255,0.4)",
+                          "0 0 70px rgba(162,119,255,0.6)",
+                          "0 0 30px rgba(162,119,255,0.4)",
+                        ]
+                      : [
+                          "0 0 30px rgba(79,209,197,0.4)",
+                          "0 0 70px rgba(79,209,197,0.65)",
+                          "0 0 30px rgba(79,209,197,0.4)",
+                        ],
+                  }}
+                  transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
                   style={{
-                    background: "radial-gradient(circle at 40% 40%, rgba(162,119,255,0.4), rgba(45,31,94,0.7))",
-                    border: "1px solid rgba(162,119,255,0.4)",
+                    background: isSky
+                      ? "radial-gradient(circle at 40% 40%, rgba(162,119,255,0.4), rgba(45,31,94,0.7))"
+                      : "radial-gradient(circle at 40% 40%, rgba(79,209,197,0.35), rgba(5,35,55,0.75))",
+                    border: isSky
+                      ? "1px solid rgba(162,119,255,0.4)"
+                      : "1px solid rgba(79,209,197,0.4)",
                   }}
                 >
-                  <Compass size={28} className="text-[#d8b4fe]" />
+                  {isSky ? (
+                    <Compass size={28} className="text-[#d8b4fe]" />
+                  ) : (
+                    <Waves size={28} className="text-[#4FD1C5]" />
+                  )}
                 </motion.div>
 
                 <motion.p
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
-                  className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-aurora/60 mb-3"
+                  className="text-xs font-semibold uppercase tracking-[0.3em] mb-3"
+                  style={{ color: isSky ? "rgba(162,119,255,0.6)" : "rgba(79,209,197,0.6)" }}
                 >
                   Bạn đang bước vào
                 </motion.p>
@@ -275,21 +401,36 @@ export default function ExplorePage() {
                   transition={{ delay: 0.55, duration: 0.5 }}
                   className="font-display text-2xl font-black text-base-text-primary mb-2"
                 >
-                  Không gian {isSky ? "bầu trời" : "đại dương"}
+                  {isSky ? "Không gian Bầu Trời ✦" : "Đại Dương Bao La ◎"}
                 </motion.h1>
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 0.5 }}
-                  transition={{ delay: 0.75 }}
-                  className="text-xs text-base-text-secondary"
+                  transition={{ delay: 0.7 }}
+                  className="text-xs text-base-text-secondary mb-1"
                 >
                   {mounted ? stats.count.toLocaleString() : "—"} {stats.label}
                 </motion.p>
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 0.35 }}
+                  transition={{ delay: 0.85 }}
+                  className="text-[10px] text-base-text-secondary"
+                >
+                  {isSky
+                    ? "Kéo để khám phá dải ngân hà câu chuyện"
+                    : "Kéo để lặn sâu vào lòng đại dương bí ẩn"}
+                </motion.p>
 
-                {/* Loading progress bar */}
+                {/* Progress bar */}
                 <motion.div className="mx-auto mt-6 h-0.5 w-32 rounded-full bg-white/10 overflow-hidden">
                   <motion.div
-                    className="h-full rounded-full bg-sky-aurora/60"
+                    className="h-full rounded-full"
+                    style={{
+                      background: isSky
+                        ? "rgba(162,119,255,0.7)"
+                        : "rgba(79,209,197,0.7)",
+                    }}
                     initial={{ width: "0%" }}
                     animate={{ width: "100%" }}
                     transition={{ duration: 3.2, ease: "linear" }}
@@ -301,12 +442,12 @@ export default function ExplorePage() {
         </AnimatePresence>
 
         {/* ======================================================
-            HEADER — Compact, floating glass
+            HEADER
             ====================================================== */}
         <motion.header
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: showIntro ? 0 : 1, y: showIntro ? -20 : 0 }}
-          transition={{ duration: 0.5, delay: showIntro ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.5, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
           className="z-20 w-full px-4 pt-4 md:px-6 md:pt-5"
         >
           <div
@@ -318,10 +459,9 @@ export default function ExplorePage() {
               boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
             }}
           >
-            {/* Left — Identity */}
             <AnonymousIdentityBadge compact />
 
-            {/* Center — Space switcher */}
+            {/* Space switcher */}
             <div className="flex items-center bg-white/[0.04] rounded-xl p-1 border border-white/6">
               <button
                 onClick={() => setSpace("sky")}
@@ -403,7 +543,7 @@ export default function ExplorePage() {
         </motion.header>
 
         {/* ======================================================
-            WHISPER BAR — auto-rotating immersive hints
+            WHISPER BAR
             ====================================================== */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -561,22 +701,22 @@ export default function ExplorePage() {
             className="pointer-events-none absolute inset-x-0 top-0 h-16 z-20"
             style={{
               background: isSky
-                ? "linear-gradient(180deg, rgba(6,10,19,0.85) 0%, rgba(6,10,19,0.3) 50%, transparent 100%)"
-                : "linear-gradient(180deg, rgba(3,16,32,0.85) 0%, rgba(3,16,32,0.3) 50%, transparent 100%)",
+                ? "linear-gradient(180deg, rgba(6,10,19,0.85) 0%, transparent 100%)"
+                : "linear-gradient(180deg, rgba(3,16,32,0.85) 0%, transparent 100%)",
             }}
           />
           <div
             className="pointer-events-none absolute inset-x-0 bottom-0 h-24 z-20"
             style={{
               background: isSky
-                ? "linear-gradient(0deg, rgba(6,10,19,0.9) 0%, rgba(6,10,19,0.4) 60%, transparent 100%)"
-                : "linear-gradient(0deg, rgba(3,16,32,0.9) 0%, rgba(3,16,32,0.4) 60%, transparent 100%)",
+                ? "linear-gradient(0deg, rgba(6,10,19,0.9) 0%, transparent 100%)"
+                : "linear-gradient(0deg, rgba(3,16,32,0.9) 0%, transparent 100%)",
             }}
           />
         </div>
 
         {/* ======================================================
-            BOTTOM AREA — Stats + FAB
+            BOTTOM AREA — Stats + FAB + Mini-Map
             ====================================================== */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -586,9 +726,7 @@ export default function ExplorePage() {
         >
           {/* Live stat counter */}
           <div className="text-center mb-4">
-            <motion.p
-              className="text-[10px] text-base-text-secondary/35 flex items-center justify-center gap-1.5"
-            >
+            <motion.p className="text-[10px] text-base-text-secondary/35 flex items-center justify-center gap-1.5">
               <span className="relative flex h-1.5 w-1.5">
                 <span
                   className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-50"

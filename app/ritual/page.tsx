@@ -297,7 +297,7 @@ export default function RitualPage() {
                     <HotlineBanner />
                     <Button
                       accent={isStar ? "sky" : "ocean"}
-                      onClick={() => router.push("/explore")}
+                      onClick={() => router.push(`/explore?from=${isStar ? "sky" : "ocean"}`)}
                       className="mt-5 w-full font-bold"
                     >
                       Khám phá không gian →
