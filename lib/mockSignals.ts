@@ -9,6 +9,13 @@ import { IdentityIcon, IdentityVibe } from "./identity";
 export type StoryType = "star" | "bubble";
 export type WarmthLevel = "few" | "some" | "many";
 
+// Đặt ở đây (thay vì trong context/AppStateContext.tsx như trước) để
+// lib/storiesApi.ts có thể import mà không tạo circular dependency với
+// AppStateContext.tsx. AppStateContext.tsx re-export lại type này để mọi
+// nơi đang `import { ReactionKind } from "@/context/AppStateContext"`
+// (vd. components/explore/SignalCard.tsx) không cần đổi gì.
+export type ReactionKind = "emotion" | "sticker" | "hug" | "gift" | "message";
+
 /** Snapshot danh tính ẩn danh của người viết tại thời điểm thả câu chuyện.
  * KHÔNG hiển thị cho người khác xem trong /explore — chỉ là metadata nội
  * bộ (vd. để sau này người viết xem lại chính câu chuyện của mình ở
@@ -184,3 +191,35 @@ const OCEAN_CONTENT = [
 
 export const MOCK_SKY_STORIES: Story[] = buildMockStories("star", SKY_CONTENT, 34, 101.7);
 export const MOCK_OCEAN_STORIES: Story[] = buildMockStories("bubble", OCEAN_CONTENT, 34, 211.3);
+
+// =====================================================
+// "ĐÃ CÓ NGƯỜI DỪNG LẠI ĐỌC" — tín hiệu ấm áp thụ động, tách biệt với
+// warmth/reactionCount. Một câu chuyện mới thả, dù CHƯA ai gửi tia sáng,
+// vẫn có thể đã được vài người lặng lẽ đọc qua — đây là cách nói với
+// người viết "bạn không bị lờ đi, chỉ là chưa ai lên tiếng thôi", giảm
+// cảm giác trống trải/hụt hẫng của im lặng ban đầu. KHÔNG lưu vào dữ liệu
+// (không cần persist/migration) — tính thuần theo thời gian trôi qua kể
+// từ lúc thả, có seed cố định theo id để luôn ra cùng một số giữa các lần
+// render, nhưng KHÔNG bịa số ngay khi câu chuyện còn quá mới (< 40 phút).
+// =====================================================
+function hashId(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) {
+    h = (h * 31 + id.charCodeAt(i)) % 100000;
+  }
+  return h;
+}
+
+export function quietViewsFor(story: Story): number {
+  const minutesElapsed = (Date.now() - story.createdAt) / (60 * 1000);
+  if (minutesElapsed < 40) return 0;
+
+  const hoursElapsed = minutesElapsed / 60;
+  const seed = hashId(story.id);
+  const pace = 2.1 + seeded(seed) * 2.6; // tốc độ "được đọc" riêng theo từng câu chuyện
+  const grown = Math.floor(Math.log2(hoursElapsed + 1) * pace);
+
+  // Luôn nhiều hơn hoặc bằng reactionCount thật — vì mỗi người gửi tia
+  // sáng chắc chắn đã đọc, nhưng không phải ai đọc cũng gửi tia sáng.
+  return Math.max(story.reactionCount, grown);
+}

@@ -255,12 +255,12 @@ export default function SettingsPage() {
                 <div className="flex shrink-0 items-center gap-3">
                   <div className="flex flex-col items-center gap-0.5">
                     <Toggle checked={settings.inApp[type]} onChange={(v) => setInAppSetting(type, v)} />
-                    <span className="text-[8.5px] text-base-text-secondary/35">{t("settings.notifications.inApp")}</span>
+                    <span className="text-[10px] text-base-text-secondary/40">{t("settings.notifications.inApp")}</span>
                   </div>
                   {EMAIL_CAPABLE_TYPES.includes(type) && (
                     <div className="flex flex-col items-center gap-0.5">
                       <Toggle checked={settings.email[type]} onChange={(v) => setEmailSetting(type, v)} />
-                      <span className="text-[8.5px] text-base-text-secondary/35">{t("settings.notifications.email")}</span>
+                      <span className="text-[10px] text-base-text-secondary/40">{t("settings.notifications.email")}</span>
                     </div>
                   )}
                 </div>

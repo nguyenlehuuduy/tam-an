@@ -53,9 +53,13 @@ const config: Config = {
         },
       },
       fontFamily: {
-        display: ["'Plus Jakarta Sans'", "ui-sans-serif", "system-ui", "sans-serif"],
-        body: ["'Nunito'", "ui-sans-serif", "system-ui", "sans-serif"],
-        caption: ["'Nunito'", "ui-sans-serif", "system-ui", "sans-serif"],
+        // Trỏ tới CSS variable do next/font/google sinh ra trong
+        // app/layout.tsx (--font-display/--font-body) thay vì tên font
+        // cứng — next/font tự host file font lúc build, không còn phụ
+        // thuộc Google Fonts CDN lúc runtime.
+        display: ["var(--font-display)", "ui-sans-serif", "system-ui", "sans-serif"],
+        body: ["var(--font-body)", "ui-sans-serif", "system-ui", "sans-serif"],
+        caption: ["var(--font-body)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       borderRadius: {
         card: "20px",

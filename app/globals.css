@@ -93,7 +93,7 @@ body {
 }
 
 body {
-  font-family: "Nunito", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 

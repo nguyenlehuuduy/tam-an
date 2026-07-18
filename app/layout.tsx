@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Plus_Jakarta_Sans, Nunito } from "next/font/google";
 import "./globals.css";
 import { AppStateProvider } from "@/context/AppStateContext";
 import { AuthProvider } from "@/context/AuthContext";
@@ -6,6 +7,28 @@ import { LanguageProvider } from "@/context/LanguageContext";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { VibeSync } from "@/components/onboarding/VibeSync";
 import { NotificationEventsBridge } from "@/components/notifications/NotificationEventsBridge";
+
+// Chuyển từ <link> Google Fonts nạp lúc runtime sang next/font/google — tải
+// font ngay lúc BUILD, tự host static, không còn phụ thuộc mạng lúc người
+// dùng mở app và loại bỏ hiện tượng giật layout (CLS) do font nhảy vào
+// sau khi trang đã render (mục 3.3/3.9 tài liệu dự án — khoảng trống design
+// system đã ghi nhận). CSS variable được set trên <html>, dùng lại trong
+// tailwind.config.ts (fontFamily.display/body) và globals.css.
+const plusJakarta = Plus_Jakarta_Sans({
+  // "vietnamese" subset cần thiết để chữ có dấu (dùng trong tiêu đề như
+  // "Không gian Bầu Trời") render đúng font này thay vì rơi về fallback.
+  subsets: ["latin", "vietnamese"],
+  weight: ["500", "600", "700", "800"],
+  variable: "--font-display",
+  display: "swap",
+});
+
+const nunito = Nunito({
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "600", "700"],
+  variable: "--font-body",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Trạm Phát Sáng",
@@ -26,20 +49,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi" className="dark" data-vibe="cozy">
-      <head>
-        {/*
-          Fonts are linked at runtime (not next/font/google) so this project
-          builds fine offline too — swap for next/font/google once you have
-          normal internet access, per the design spec (mục A5).
-        */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Nunito:wght@400;600;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="vi" className={`dark ${plusJakarta.variable} ${nunito.variable}`} data-vibe="cozy">
       <body className="bg-base-gradient">
         <LanguageProvider>
           <AuthProvider>

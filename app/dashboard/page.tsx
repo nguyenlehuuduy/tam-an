@@ -24,7 +24,7 @@ import { useAppState } from "@/context/AppStateContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { FeedbackNudge } from "@/components/feedback/FeedbackNudge";
-import { Story } from "@/lib/mockSignals";
+import { Story, quietViewsFor } from "@/lib/mockSignals";
 import { suggestArticlesForMood, getArticleTranslation, CATEGORY_LABELS } from "@/lib/libraryContent";
 import clsx from "clsx";
 
@@ -721,6 +721,18 @@ export default function DashboardPage() {
                   <p className="mt-2.5 text-[14px] leading-relaxed text-base-text-primary group-hover:text-white transition-colors">
                     {s.content}
                   </p>
+                  {/* Tín hiệu ấm áp thụ động — "đã có người đọc", tách biệt
+                      với reaction/warmth, để lấp khoảng lặng trước khi có
+                      ai lên tiếng thật sự. */}
+                  {(() => {
+                    const views = quietViewsFor(s);
+                    if (views === 0 || s.reactionCount >= 3) return null;
+                    return (
+                      <p className="mt-2 text-[11px] italic text-base-text-secondary/45">
+                        Đã có {views} người dừng lại đọc câu chuyện này, dù chưa ai lên tiếng.
+                      </p>
+                    );
+                  })()}
                 </li>
               ))}
             </ul>

@@ -191,7 +191,7 @@ export function SignalCard({ signal }: SignalCardProps) {
   function handleSend() {
     if (!selectedKey || isMessageFlagged) return;
     const hasMsg = trimmedMsg.length > 0;
-    const ok = sendReaction(signal.id, "message", hasMsg);
+    const ok = sendReaction(signal.id, "message", hasMsg, hasMsg ? trimmedMsg : undefined);
     if (!ok) {
       setBlocked(true);
       return;
