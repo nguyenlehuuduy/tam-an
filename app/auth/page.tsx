@@ -56,12 +56,27 @@ export default function AuthPage() {
   const [whisperIdx, setWhisperIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Nếu đã đăng nhập → redirect về checkin (hoặc /profile-setup nếu Registered
-  // user chưa từng tuỳ chỉnh hồ sơ — Module 1.2)
+  // Nơi quay lại sau khi đăng nhập xong — ví dụ /auth?next=/ritual khi ai đó
+  // bị chặn ở bước "thả câu chuyện" (cần tài khoản để nhận thông báo phản
+  // hồi). Đọc thủ công từ window.location thay vì useSearchParams để khỏi
+  // cần bọc Suspense riêng cho trang này (cùng cách làm với /explore).
+  const [nextParam, setNextParam] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setNextParam(new URLSearchParams(window.location.search).get("next"));
+  }, []);
+
+  // Nếu đã đăng nhập → về thẳng /explore (hoặc "next" nếu có), trừ khi
+  // Registered user chưa từng tuỳ chỉnh hồ sơ (Module 1.2) thì luôn phải
+  // qua /profile-setup một lần trước — "next" được chuyển tiếp qua đó.
   useEffect(() => {
     if (!hydrated || !appHydrated || !isAuthenticated) return;
-    router.replace(profileSetupComplete ? "/checkin" : "/profile-setup");
-  }, [hydrated, appHydrated, isAuthenticated, profileSetupComplete, router]);
+    if (!profileSetupComplete) {
+      router.replace(nextParam ? `/profile-setup?next=${encodeURIComponent(nextParam)}` : "/profile-setup");
+    } else {
+      router.replace(nextParam || "/explore");
+    }
+  }, [hydrated, appHydrated, isAuthenticated, profileSetupComplete, nextParam, router]);
 
   // Focus email input khi vào phase 2
   useEffect(() => {
@@ -75,12 +90,17 @@ export default function AuthPage() {
     if (phase !== "check") return;
     const t = setTimeout(() => {
       confirmMagicLink();
-      // Đăng nhập lần đầu → luôn ghé /profile-setup để đặt tên + avatar AI
-      // trước (Module 1.2); trang đó tự đưa họ sang /checkin sau khi xong.
-      router.push("/profile-setup");
+      // Chưa từng tuỳ chỉnh hồ sơ (lần đầu đăng nhập trên thiết bị này) →
+      // luôn ghé /profile-setup trước (Module 1.2), chuyển tiếp "next" qua
+      // đó. Đã từng tuỳ chỉnh rồi (đăng nhập lại) → về thẳng next/ /explore.
+      if (!profileSetupComplete) {
+        router.push(nextParam ? `/profile-setup?next=${encodeURIComponent(nextParam)}` : "/profile-setup");
+      } else {
+        router.push(nextParam || "/explore");
+      }
     }, 3000);
     return () => clearTimeout(t);
-  }, [phase, confirmMagicLink, router]);
+  }, [phase, confirmMagicLink, router, profileSetupComplete, nextParam]);
 
   // Resend countdown
   useEffect(() => {
@@ -293,7 +313,7 @@ export default function AuthPage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 1.2 }}
-                onClick={() => router.push("/checkin")}
+                onClick={() => router.push("/explore")}
                 className="orb-btn mt-5 text-xs text-base-text-secondary/50 hover:text-base-text-secondary transition-colors py-2"
                 style={{ minHeight: 0 }}
               >
@@ -509,7 +529,7 @@ export default function AuthPage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.55 }}
-                onClick={() => router.push("/checkin")}
+                onClick={() => router.push("/explore")}
                 className="orb-btn mt-5 text-xs text-base-text-secondary/40 hover:text-base-text-secondary/60 transition-colors py-2"
                 style={{ minHeight: 0 }}
               >

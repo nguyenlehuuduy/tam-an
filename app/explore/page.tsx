@@ -29,6 +29,11 @@ import {
   Settings,
   BookOpen,
   Waves,
+  HeartHandshake,
+  X,
+  Sparkles,
+  Lock,
+  MessageCircle,
 } from "lucide-react";
 import clsx from "clsx";
 import { SkyCanvas } from "@/components/canvas/SkyCanvas";
@@ -40,6 +45,8 @@ import { SpaceMap } from "@/components/explore/SpaceMap";
 import { ConstellationView } from "@/components/explore/ConstellationView";
 import { AnonymousIdentityBadge } from "@/components/onboarding/AnonymousIdentityBadge";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { SupportButton } from "@/components/ui/SupportButton";
+import { MoreMenu } from "@/components/ui/MoreMenu";
 import { useAppState } from "@/context/AppStateContext";
 import { Story } from "@/lib/mockSignals";
 import { playOpenSignal, startAmbient, stopAmbient } from "@/lib/sound";
@@ -79,6 +86,11 @@ const STATS_DATA = {
 // =====================================================
 const WORLD_SCALE = 7; // container = 700% kích thước khung nhìn
 
+// Chỉ hiện đúng MỘT lần trong đời của thiết bị này — bù lại phần "chạm cảm
+// xúc" mà phase intro của /checkin cũ từng đảm nhiệm cho lần đầu ghé thăm,
+// từ khi /checkin trở thành tuỳ chọn thay vì bắt buộc (xem app/page.tsx).
+const WELCOME_SEEN_KEY = "solace:has-seen-welcome";
+
 interface DustMote {
   id: string;
   x: number;
@@ -104,7 +116,12 @@ function generateDust(count: number, keyPrefix: string): DustMote[] {
 }
 
 export default function ExplorePage() {
-  const { stories, soundEnabled, toggleSound, encouragedStoryIds } = useAppState();
+  const { stories, soundEnabled, toggleSound, encouragedStoryIds, mood } = useAppState();
+  // Module "vào thẳng /explore" — check-in không còn là điều kiện bắt buộc
+  // trước khi vào không gian (xem app/page.tsx). Thay vào đó, một lời mời
+  // nhẹ nhàng, có thể đóng bất cứ lúc nào, xuất hiện nếu người dùng chưa
+  // check-in mood trong phiên này — không chặn thao tác nào cả.
+  const [checkinNudgeDismissed, setCheckinNudgeDismissed] = useState(false);
   const [space, setSpace] = useState<Space>("sky");
   const [openStory, setOpenStory] = useState<Story | null>(null);
   const [whisperIdx, setWhisperIdx] = useState(0);
@@ -113,6 +130,32 @@ export default function ExplorePage() {
   // Module 2.2 — "Chỉ lắng nghe thôi": đọc thẳng từ URL (?from=listen) thay
   // vì dùng useSearchParams để khỏi cần bọc Suspense riêng cho trang này.
   const [listenOnly, setListenOnly] = useState(false);
+
+  // Chào mừng lần đầu — xem WELCOME_SEEN_KEY ở trên. Hiện TRƯỚC overlay
+  // giới thiệu sky/ocean (showIntro), và chỉ đóng bằng hành động chủ động
+  // (không tự tắt theo thời gian), vì đây là ấn tượng đầu tiên nên xứng
+  // đáng có một khoảnh khắc chủ đích thay vì trôi qua trong vài giây.
+  const [showWelcome, setShowWelcome] = useState(false);
+  useEffect(() => {
+    try {
+      if (!window.localStorage.getItem(WELCOME_SEEN_KEY)) {
+        setShowWelcome(true);
+      }
+    } catch {
+      // storage không khả dụng — bỏ qua, không chặn trải nghiệm
+    }
+  }, []);
+  function handleCloseWelcome() {
+    setShowWelcome(false);
+    try {
+      window.localStorage.setItem(WELCOME_SEEN_KEY, "1");
+    } catch {
+      // ignore
+    }
+  }
+  // Bụi sao riêng cho khoảnh khắc chào mừng — thêm chiều sâu ngay cả ở
+  // phần overlay tối, tái dùng đúng hàm generateDust() đã có sẵn bên dưới.
+  const welcomeDust = useMemo(() => generateDust(24, "welcome"), []);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 900, height: 700 });
@@ -327,6 +370,172 @@ export default function ExplorePage() {
     <Canvas mouseX={springX} mouseY={springY}>
       <div className="relative flex h-dvh w-full flex-col overflow-hidden">
         {/* ======================================================
+            CHÀO MỪNG LẦN ĐẦU — chỉ hiện một lần duy nhất (xem
+            WELCOME_SEEN_KEY), z-index cao hơn overlay giới thiệu sky/ocean
+            bên dưới vì đây là ấn tượng đầu tiên thật sự của người dùng.
+            ====================================================== */}
+        <AnimatePresence>
+          {showWelcome && (
+            <motion.div
+              key="welcome-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.6 }}
+              className="absolute inset-0 z-[60] flex items-center justify-center overflow-hidden px-5"
+              style={{
+                background:
+                  "radial-gradient(ellipse at 50% 45%, rgba(6,9,17,0.5) 0%, rgba(6,9,17,0.32) 55%, rgba(4,6,12,0.18) 100%)",
+                backdropFilter: "blur(1.5px)",
+              }}
+            >
+              {/* Bụi sao riêng cho khoảnh khắc này — sao thật của SkyCanvas
+                  vẫn le lói qua lớp phủ mờ phía sau, lớp này chỉ tô thêm
+                  chiều sâu ngay quanh khu vực thẻ nội dung */}
+              {welcomeDust.map((d) => (
+                <span
+                  key={d.id}
+                  className="pointer-events-none absolute rounded-full animate-twinkle"
+                  style={{
+                    top: `${d.y}%`,
+                    left: `${d.x}%`,
+                    width: d.size,
+                    height: d.size,
+                    opacity: d.opacity,
+                    background: "#fff",
+                    animationDuration: `${d.twinkleSpeed}s`,
+                  }}
+                />
+              ))}
+
+              {/* Nebula trôi chậm phía sau thẻ — tăng cảm giác bí ẩn, có
+                  chủ đích chứ không chỉ là một hộp thoại phẳng */}
+              {!prefersReducedMotion && (
+                <>
+                  <div
+                    className="pointer-events-none absolute -top-32 left-1/4 h-[420px] w-[420px] rounded-full blur-[110px] animate-nebula-drift"
+                    style={{ background: "radial-gradient(circle, rgba(162,119,255,0.28), transparent 70%)" }}
+                  />
+                  <div
+                    className="pointer-events-none absolute -bottom-40 right-1/4 h-[380px] w-[380px] rounded-full blur-[100px]"
+                    style={{
+                      background: "radial-gradient(circle, rgba(79,209,197,0.16), transparent 70%)",
+                      animation: "nebula-drift 26s ease-in-out infinite reverse",
+                    }}
+                  />
+                </>
+              )}
+
+              <motion.div
+                initial={{ scale: 0.92, opacity: 0, y: 14 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                transition={{ delay: 0.15, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                className="glass-card relative z-10 flex w-full max-w-sm flex-col items-center rounded-[28px] px-7 py-8 text-center"
+              >
+                {/* Icon + quầng sáng nhiều lớp */}
+                <div className="relative mb-6 flex h-[76px] w-[76px] items-center justify-center">
+                  {!prefersReducedMotion && (
+                    <>
+                      <motion.div
+                        className="absolute inset-0 rounded-full blur-xl pointer-events-none"
+                        animate={{ scale: [1, 1.6, 1], opacity: [0.4, 0, 0.4] }}
+                        transition={{ duration: 2.6, repeat: Infinity }}
+                        style={{ background: "rgba(192,132,252,0.35)" }}
+                      />
+                      <motion.div
+                        className="absolute inset-0 rounded-full blur-2xl pointer-events-none"
+                        animate={{ scale: [1, 2, 1], opacity: [0.25, 0, 0.25] }}
+                        transition={{ duration: 3.2, repeat: Infinity, delay: 0.4 }}
+                        style={{ background: "rgba(124,158,255,0.25)" }}
+                      />
+                    </>
+                  )}
+                  <motion.div
+                    className="relative flex h-16 w-16 items-center justify-center rounded-full"
+                    animate={
+                      prefersReducedMotion
+                        ? undefined
+                        : { boxShadow: ["0 0 30px rgba(162,119,255,0.35)", "0 0 55px rgba(162,119,255,0.55)", "0 0 30px rgba(162,119,255,0.35)"] }
+                    }
+                    transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+                    style={{
+                      background: "radial-gradient(circle at 40% 40%, rgba(192,132,252,0.4), rgba(45,31,94,0.7))",
+                      border: "1px solid rgba(192,132,252,0.4)",
+                    }}
+                  >
+                    <Sparkles size={28} className="text-[#d8b4fe]" />
+                  </motion.div>
+                </div>
+
+                <motion.p
+                  initial={{ opacity: 0, filter: "blur(6px)" }}
+                  animate={{ opacity: 1, filter: "blur(0px)" }}
+                  transition={{ delay: 0.3, duration: 0.6 }}
+                  className="mb-2 text-xs font-semibold uppercase tracking-[0.3em] text-base-text-secondary/60"
+                >
+                  Chào mừng đến với
+                </motion.p>
+                <motion.h1
+                  initial={{ opacity: 0, filter: "blur(10px)", y: 6 }}
+                  animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
+                  transition={{ delay: 0.4, duration: 0.65 }}
+                  className="mb-3 font-display text-3xl font-black leading-snug text-base-text-primary"
+                >
+                  <span className="shimmer-text">Solace</span>
+                </motion.h1>
+                <motion.p
+                  initial={{ opacity: 0, filter: "blur(6px)" }}
+                  animate={{ opacity: 1, filter: "blur(0px)" }}
+                  transition={{ delay: 0.55, duration: 0.6 }}
+                  className="mb-6 text-[13.5px] leading-relaxed text-base-text-secondary/75"
+                >
+                  Một không gian ẩn danh để bạn lắng nghe và được lắng nghe. Đi dạo quanh đây — mỗi ngôi sao,
+                  mỗi bong bóng là một câu chuyện ai đó đã thả xuống.
+                </motion.p>
+
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.7, duration: 0.5 }}
+                  className="mb-7 flex w-full flex-col divide-y divide-white/6 border-y border-white/8"
+                >
+                  <div className="flex items-center gap-3 py-2.5 text-left">
+                    <Lock size={13} className="shrink-0 text-purple-300/70" />
+                    <p className="text-[12px] text-base-text-secondary/75">Ẩn danh hoàn toàn — không cần tài khoản để bắt đầu</p>
+                  </div>
+                  <div className="flex items-center gap-3 py-2.5 text-left">
+                    <MessageCircle size={13} className="shrink-0 text-purple-300/70" />
+                    <p className="text-[12px] text-base-text-secondary/75">Gửi phản hồi, viết ra tâm sự thoải mái, không cần đăng nhập</p>
+                  </div>
+                  <div className="flex items-center gap-3 py-2.5 text-left">
+                    <Sparkles size={13} className="shrink-0 text-purple-300/70" />
+                    <p className="text-[12px] text-base-text-secondary/75">Chạm vào bất kỳ ngôi sao hay bong bóng nào để nghe câu chuyện</p>
+                  </div>
+                </motion.div>
+
+                <motion.button
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.85, duration: 0.5 }}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={handleCloseWelcome}
+                  className="orb-btn relative w-full overflow-hidden rounded-full py-3.5 text-[14px] font-bold text-white"
+                  style={{
+                    minHeight: 0,
+                    background: "linear-gradient(135deg, #2D1F5E 0%, #7C5AE2 50%, #C084FC 100%)",
+                    boxShadow: "0 0 28px rgba(124,90,226,0.45), 0 6px 20px rgba(0,0,0,0.4)",
+                  }}
+                >
+                  <span className="absolute inset-0 shimmer-bg pointer-events-none" style={{ borderRadius: "inherit" }} />
+                  <span className="relative">Bắt đầu khám phá →</span>
+                </motion.button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ======================================================
             INTRO OVERLAY
             ====================================================== */}
         <AnimatePresence>
@@ -451,7 +660,7 @@ export default function ExplorePage() {
           className="z-20 w-full px-4 pt-4 md:px-6 md:pt-5"
         >
           <div
-            className="mx-auto flex max-w-3xl items-center justify-between rounded-2xl px-4 py-2.5 md:px-5"
+            className="mx-auto flex max-w-3xl flex-col gap-2 rounded-2xl px-3 py-2.5 sm:px-4 md:px-5"
             style={{
               background: "rgba(12,16,28,0.75)",
               backdropFilter: "blur(20px)",
@@ -459,14 +668,69 @@ export default function ExplorePage() {
               boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
             }}
           >
-            <AnonymousIdentityBadge compact />
+            {/* Hàng 1 — luôn có: identity badge + space switcher (chỉ trên
+                sm trở lên, xem hàng riêng bên dưới cho mobile) + icon cụm */}
+            <div className="flex items-center justify-between gap-2">
+              <AnonymousIdentityBadge compact />
 
-            {/* Space switcher */}
-            <div className="flex items-center bg-white/[0.04] rounded-xl p-1 border border-white/6">
+              {/* Space switcher — inline trên sm+, ẩn trên mobile để không
+                  vỡ layout, thay bằng hàng riêng full-width bên dưới */}
+              <div className="hidden items-center rounded-xl border border-white/6 bg-white/[0.04] p-1 sm:flex">
+                <button
+                  onClick={() => setSpace("sky")}
+                  className={clsx(
+                    "rounded-lg px-4 py-1.5 text-[11px] font-bold transition-all duration-300",
+                    isSky
+                      ? "bg-sky-violet/80 text-white shadow-md"
+                      : "text-base-text-secondary/60 hover:text-base-text-secondary"
+                  )}
+                  style={isSky ? { boxShadow: "0 0 14px rgba(124,158,255,0.4)" } : {}}
+                >
+                  ✦ Bầu trời
+                </button>
+                <button
+                  onClick={() => setSpace("ocean")}
+                  className={clsx(
+                    "rounded-lg px-4 py-1.5 text-[11px] font-bold transition-all duration-300",
+                    !isSky
+                      ? "bg-ocean-teal/80 text-white shadow-md"
+                      : "text-base-text-secondary/60 hover:text-base-text-secondary"
+                  )}
+                  style={!isSky ? { boxShadow: "0 0 14px rgba(79,209,197,0.4)" } : {}}
+                >
+                  ◎ Đại dương
+                </button>
+              </div>
+
+              {/* Right — Sound + Support + Notifications luôn hiện; Dashboard/
+                  Thư viện/Cài đặt gom vào MoreMenu để gọn trên mobile */}
+              <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+                <button
+                  aria-label={soundEnabled ? "Tắt âm thanh" : "Bật âm thanh"}
+                  onClick={toggleSound}
+                  className="orb-btn flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.04] text-base-text-secondary/50 hover:bg-white/8 hover:text-base-text-secondary transition-colors sm:h-auto sm:w-auto sm:rounded-lg sm:p-2"
+                  style={{ minHeight: 0 }}
+                >
+                  {soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
+                </button>
+                <SupportButton />
+                <NotificationBell />
+                <MoreMenu
+                  items={[
+                    { href: "/dashboard", label: "Dashboard cá nhân", icon: History },
+                    { href: "/library", label: "Thư viện kiến thức", icon: BookOpen },
+                    { href: "/settings", label: "Cài đặt", icon: Settings },
+                  ]}
+                />
+              </div>
+            </div>
+
+            {/* Hàng 2 — space switcher full-width, CHỈ trên mobile */}
+            <div className="flex items-center justify-center rounded-xl border border-white/6 bg-white/[0.04] p-1 sm:hidden">
               <button
                 onClick={() => setSpace("sky")}
                 className={clsx(
-                  "rounded-lg px-4 py-1.5 text-[11px] font-bold transition-all duration-300",
+                  "flex-1 rounded-lg py-1.5 text-[11px] font-bold transition-all duration-300",
                   isSky
                     ? "bg-sky-violet/80 text-white shadow-md"
                     : "text-base-text-secondary/60 hover:text-base-text-secondary"
@@ -478,7 +742,7 @@ export default function ExplorePage() {
               <button
                 onClick={() => setSpace("ocean")}
                 className={clsx(
-                  "rounded-lg px-4 py-1.5 text-[11px] font-bold transition-all duration-300",
+                  "flex-1 rounded-lg py-1.5 text-[11px] font-bold transition-all duration-300",
                   !isSky
                     ? "bg-ocean-teal/80 text-white shadow-md"
                     : "text-base-text-secondary/60 hover:text-base-text-secondary"
@@ -487,41 +751,6 @@ export default function ExplorePage() {
               >
                 ◎ Đại dương
               </button>
-            </div>
-
-            {/* Right — Sound + Dashboard + Library + Notifications + Settings
-                (Bản đồ đã chuyển sang góc trái màn hình, xem bên dưới) */}
-            <div className="flex items-center gap-1.5">
-              <button
-                aria-label={soundEnabled ? "Tắt âm thanh" : "Bật âm thanh"}
-                onClick={toggleSound}
-                className="orb-btn rounded-lg bg-white/[0.04] p-2 text-base-text-secondary/50 hover:bg-white/8 hover:text-base-text-secondary transition-colors"
-                style={{ minHeight: 0 }}
-              >
-                {soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
-              </button>
-              <Link
-                href="/dashboard"
-                aria-label="Dashboard cá nhân"
-                className="rounded-lg bg-white/[0.04] p-2 text-base-text-secondary/50 hover:bg-white/8 hover:text-base-text-secondary transition-colors"
-              >
-                <History size={14} />
-              </Link>
-              <Link
-                href="/library"
-                aria-label="Thư viện kiến thức"
-                className="rounded-lg bg-white/[0.04] p-2 text-base-text-secondary/50 hover:bg-white/8 hover:text-base-text-secondary transition-colors"
-              >
-                <BookOpen size={14} />
-              </Link>
-              <NotificationBell />
-              <Link
-                href="/settings"
-                aria-label="Cài đặt"
-                className="rounded-lg bg-white/[0.04] p-2 text-base-text-secondary/50 hover:bg-white/8 hover:text-base-text-secondary transition-colors"
-              >
-                <Settings size={14} />
-              </Link>
             </div>
           </div>
 
@@ -541,6 +770,44 @@ export default function ExplorePage() {
             )}
           </AnimatePresence>
         </motion.header>
+
+        {/* ======================================================
+            CHECK-IN NUDGE — lời mời không bắt buộc, thay cho việc ép
+            người dùng qua /checkin trước khi vào không gian này.
+            ====================================================== */}
+        <AnimatePresence>
+          {mood === null && !checkinNudgeDismissed && !showIntro && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10, height: 0 }}
+              transition={{ delay: 0.3, duration: 0.4 }}
+              className="z-20 mx-auto mt-2 flex w-full max-w-3xl items-center gap-2.5 px-4 md:px-6"
+            >
+              <div className="flex w-full items-center gap-2.5 rounded-2xl border border-warm/20 bg-warm/8 px-4 py-2.5 backdrop-blur-sm">
+                <HeartHandshake size={14} className="shrink-0 text-warm" />
+                <p className="flex-1 text-[11.5px] leading-snug text-base-text-primary/80">
+                  Hôm nay bạn cảm thấy thế nào? Check-in chỉ mất 10 giây.
+                </p>
+                <Link
+                  href="/checkin?quick=1"
+                  className="orb-btn shrink-0 rounded-full bg-warm/20 px-3 py-1.5 text-[11px] font-bold text-warm hover:bg-warm/30 transition-colors"
+                  style={{ minHeight: 0 }}
+                >
+                  Check-in
+                </Link>
+                <button
+                  onClick={() => setCheckinNudgeDismissed(true)}
+                  aria-label="Đóng"
+                  className="orb-btn shrink-0 text-base-text-secondary/40 hover:text-base-text-secondary transition-colors"
+                  style={{ minHeight: 0 }}
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ======================================================
             WHISPER BAR
@@ -598,7 +865,12 @@ export default function ExplorePage() {
                 setOpenStory(echoStory);
                 setEchoStory(null);
               }}
-              className="pointer-events-auto absolute left-1/2 top-[88px] z-40 w-[86%] max-w-xs -translate-x-1/2 rounded-2xl px-4 py-3 text-left md:top-[96px]"
+              // top-[150px] trên mobile để chừa đủ chỗ cho header 2 hàng
+              // (badge/icon + space switcher riêng) cộng thêm banner nhắc
+              // check-in nếu đang hiện cùng lúc — header 1 hàng cũ chỉ cần
+              // 88px, giờ cần nhiều hơn. Từ md trở lên header vẫn 1 hàng
+              // như cũ nên giữ nguyên 96px.
+              className="pointer-events-auto absolute left-1/2 top-[150px] z-40 w-[86%] max-w-xs -translate-x-1/2 rounded-2xl px-4 py-3 text-left md:top-[96px]"
               style={{
                 background: "rgba(10,14,24,0.82)",
                 backdropFilter: "blur(16px)",
@@ -629,7 +901,13 @@ export default function ExplorePage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: showIntro ? 0 : 1 }}
             transition={{ delay: 0.4, duration: 0.4 }}
-            className="pointer-events-none absolute bottom-4 left-4 z-30 md:bottom-5 md:left-5"
+            // Trên mobile, kéo bản đồ lên cao hơn hẳn (bottom-28 thay vì
+            // bottom-4) — vùng FAB + dòng thống kê ở đáy màn hình chiếm
+            // khoảng 24-74px tính từ cạnh dưới trên điện thoại, nếu để bản
+            // đồ ở bottom-4 (128px cao) sẽ đè lên đúng vùng đó và chặn tap
+            // vào FAB. Từ md trở lên, khung hình rộng ra nên không còn
+            // xung đột, quay lại vị trí góc dưới-trái quen thuộc.
+            className="pointer-events-none absolute bottom-28 left-3 z-30 md:bottom-5 md:left-5"
           >
             <SpaceMap
               stories={visible}

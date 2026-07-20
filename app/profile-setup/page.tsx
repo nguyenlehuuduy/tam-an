@@ -38,11 +38,21 @@ export default function ProfileSetupPage() {
   const [avatarSeed, setAvatarSeed] = useState<string>(() => randomAvatarSeed());
   const [initialized, setInitialized] = useState(false);
 
+  // Nơi quay lại sau khi xong bước này (ví dụ /ritual nếu đang giữa chừng
+  // thả câu chuyện) — đọc thủ công để khỏi cần bọc Suspense riêng.
+  const [nextParam, setNextParam] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setNextParam(new URLSearchParams(window.location.search).get("next"));
+  }, []);
+
   // Guard: chỉ Registered user mới tuỳ chỉnh được avatar AI (spec 1.1/1.2)
   useEffect(() => {
     if (!authHydrated) return;
-    if (!isAuthenticated) router.replace("/auth");
-  }, [authHydrated, isAuthenticated, router]);
+    if (!isAuthenticated) {
+      router.replace(nextParam ? `/auth?next=${encodeURIComponent(nextParam)}` : "/auth");
+    }
+  }, [authHydrated, isAuthenticated, nextParam, router]);
 
   // Nạp giá trị khởi điểm từ identity hiện tại (tên gợi ý mặc định, vibe đang chọn...)
   useEffect(() => {
@@ -71,12 +81,12 @@ export default function ProfileSetupPage() {
       avatarSeed,
       avatarPrompt: prompt.trim() || undefined,
     });
-    router.push("/checkin");
+    router.push(nextParam || "/explore");
   }
 
   function handleSkip() {
     skipProfileSetup();
-    router.push("/checkin");
+    router.push(nextParam || "/explore");
   }
 
   return (

@@ -2,6 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+/* SkyCanvas dùng animationName: "shooting-star" qua inline style (không
+   phải className) — Tailwind JIT chỉ sinh @keyframes cho utility class nó
+   thấy được trong nguồn, nên "animate-shooting-star" (chỉ tồn tại ở
+   tailwind.config.ts, chưa từng được dùng làm className ở đâu) không bao
+   giờ được build ra CSS thật. Khai báo thủ công ở đây để hiệu ứng sao băng
+   thực sự chạy, khớp 1-1 với keyframes cùng tên trong tailwind.config.ts. */
+@keyframes shooting-star {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  24% {
+    transform: translate(-280px, 180px);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-280px, 180px);
+    opacity: 0;
+  }
+}
+
 :root {
   color-scheme: dark;
 

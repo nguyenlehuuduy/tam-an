@@ -1,16 +1,15 @@
 "use client";
 
 import { HeartHandshake, Phone } from "lucide-react";
+import { SUPPORT_RESOURCES } from "@/lib/supportResources";
 
-// Số 111 là Tổng đài điện thoại Quốc gia Bảo vệ Trẻ em (Cục Trẻ em, Bộ
-// LĐTBXH) — hoạt động 24/7, miễn phí, có tư vấn tâm lý cho lo âu, trầm
-// cảm, stress, ý nghĩ tự tử. Trước khi ra mắt thật, đội ngũ nên xác nhận
-// lại số này và cân nhắc bổ sung thêm đường dây phù hợp với độ tuổi/khu
-// vực cụ thể của người dùng mục tiêu.
-const HOTLINE_NUMBER = "111";
-const HOTLINE_LABEL = "Tổng đài Quốc gia Bảo vệ Trẻ em — miễn phí, 24/7";
+// Dùng chung nguồn dữ liệu với SupportButton (lib/supportResources.ts) để
+// chỉ có MỘT nơi duy nhất cần cập nhật nếu số điện thoại/giờ hoạt động
+// thay đổi. Ở đây chỉ hiển thị lựa chọn đầu tiên (ưu tiên cao nhất) để
+// giữ banner gọn — muốn xem đầy đủ các lựa chọn thì có SupportButton.
 
 export function HotlineBanner() {
+  const primary = SUPPORT_RESOURCES[0];
   return (
     <div className="rounded-card border border-caution/30 bg-caution/10 p-4">
       <div className="flex items-start gap-3">
@@ -22,12 +21,15 @@ export function HotlineBanner() {
             Nếu lòng bạn đang rất nặng, có người sẵn sàng lắng nghe ngay bây giờ.
           </p>
           <a
-            href={`tel:${HOTLINE_NUMBER}`}
+            href={`tel:${primary.phone.replace(/\s/g, "")}`}
             className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-caution underline-offset-4 hover:underline"
           >
             <Phone size={14} />
-            Gọi {HOTLINE_NUMBER} · {HOTLINE_LABEL}
+            Gọi {primary.phone} · {primary.name} ({primary.hours})
           </a>
+          <p className="mt-1.5 text-[11px] text-caution/60">
+            Ngoài giờ trên? Gọi 111 (Tổng đài Quốc gia Bảo vệ Trẻ em, 24/7, miễn phí).
+          </p>
         </div>
       </div>
     </div>

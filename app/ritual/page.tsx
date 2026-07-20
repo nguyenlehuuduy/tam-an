@@ -10,10 +10,12 @@ import { HotlineBanner } from "@/components/ui/HotlineBanner";
 import { Button } from "@/components/ui/Button";
 import Link from "next/link";
 import { useAppState } from "@/context/AppStateContext";
+import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { suggestArticlesForMood, getArticleTranslation, LibraryArticle } from "@/lib/libraryContent";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Lock, Sparkles } from "lucide-react";
 import { StoryType } from "@/lib/mockSignals";
+import { generateCompanionReflection } from "@/lib/aiCompanion";
 
 // =====================================================
 // THÔNG ĐIỆP TÍCH CỰC — xoay vòng mỗi 3 giây
@@ -35,11 +37,20 @@ const POSITIVE_MESSAGES = [
 export default function RitualPage() {
   const router = useRouter();
   const { draft, releaseDraft } = useAppState();
+  const { isAuthenticated, hydrated: authHydrated } = useAuth();
   const { language } = useLanguage();
+  // Đăng chia sẻ (thả câu chuyện) giờ cần đăng nhập — lý do duy nhất: để
+  // khi có người phản hồi/gửi tia sáng, TÁC GIẢ có một kênh (thông báo +
+  // sau này là email) để nhận lại. Soạn thảo ở /write vẫn hoàn toàn tự do
+  // cho Guest — chỉ chặn đúng ở bước "thả" này, không chặn từ đầu.
+  const needsLogin = authHydrated && !isAuthenticated;
   const [phase, setPhase] = useState<"hold" | "released">("hold");
   const [highRisk, setHighRisk] = useState(false);
   const [lowMoodArticles, setLowMoodArticles] = useState<LibraryArticle[]>([]);
   const [msgIdx, setMsgIdx] = useState(0);
+  // "Solace đồng hành" — phản hồi tự động, cá nhân hoá theo nội dung + mood
+  // vừa thả (xem lib/aiCompanion.ts, MÔ PHỎNG rule-based, không phải AI thật).
+  const [companionNote, setCompanionNote] = useState<string | null>(null);
 
   const [savedType] = useState(draft.type);
   // Loại THẬT SỰ sau khi thả — quyết định bởi hướng kéo (lên = bầu trời,
@@ -82,13 +93,14 @@ export default function RitualPage() {
     const isLowMood = !isHighRisk && mood !== null && mood <= 3;
     setHighRisk(isHighRisk);
     setLowMoodArticles(isLowMood ? suggestArticlesForMood(mood, 2) : []);
-    setPhase("released");
-
-    // Không highRisk và mood không thấp → redirect thẳng /explore sau 2s.
-    // Nếu mood thấp, dừng lại một nhịp để gợi ý bài viết trước khi tiếp tục.
-    if (!isHighRisk && !isLowMood) {
-      setTimeout(() => router.push("/explore"), 2000);
+    // Bỏ qua khi highRisk — ưu tiên duy nhất lúc đó là HotlineBanner, không
+    // muốn làm loãng bằng một phản hồi tự động khác cùng lúc.
+    if (!isHighRisk && result) {
+      setCompanionNote(
+        generateCompanionReflection({ id: result.story.id, content: result.story.content, moodAtRelease: mood })
+      );
     }
+    setPhase("released");
   }
 
   return (
@@ -130,35 +142,78 @@ export default function RitualPage() {
                 transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
                 className="flex flex-col items-center gap-6 w-full max-w-sm"
               >
-                {/* Instruction — soft & mysterious */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="text-center"
-                >
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-base-text-secondary/40 mb-2">
-                    bầu trời và đại dương đều đang chờ
-                  </p>
-                  <p className="text-sm text-base-text-secondary/60">
-                    Vuốt lên để hoá thành sao bay lên bầu trời,{" "}
-                    <br className="hidden sm:block" />
-                    hoặc vuốt xuống để hoá thành bong bóng chìm xuống đại dương
-                  </p>
-                </motion.div>
+                {needsLogin ? (
+                  // ============================================
+                  // GATE — cần đăng nhập trước khi thả câu chuyện
+                  // Draft vẫn nguyên vẹn (lưu trong AppStateContext), quay
+                  // lại đây sau khi đăng nhập là thả được ngay.
+                  // ============================================
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 }}
+                    className="flex flex-col items-center gap-5 rounded-card border border-white/10 bg-white/[0.04] px-6 py-8 text-center backdrop-blur"
+                  >
+                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-warm/15 text-warm">
+                      <Lock size={22} />
+                    </span>
+                    <div>
+                      <h2 className="font-display text-lg font-bold text-base-text-primary mb-2">
+                        Đăng nhập để thả câu chuyện này
+                      </h2>
+                      <p className="text-[13px] leading-relaxed text-base-text-secondary/70">
+                        Để khi có người gửi tia sáng hay phản hồi câu chuyện này, bạn sẽ nhận được thông báo —
+                        chỉ cần một email, không cần mật khẩu, vẫn ẩn danh hoàn toàn với người khác.
+                      </p>
+                    </div>
+                    <Button
+                      accent={savedType === "star" ? "sky" : "ocean"}
+                      onClick={() => router.push("/auth?next=/ritual")}
+                      className="w-full font-bold"
+                    >
+                      Đăng nhập ngay →
+                    </Button>
+                    <button
+                      onClick={() => router.push("/write")}
+                      className="orb-btn text-xs text-base-text-secondary/50 hover:text-base-text-secondary transition-colors py-1"
+                      style={{ minHeight: 0 }}
+                    >
+                      ← Quay lại chỉnh sửa, chưa muốn đăng nhập
+                    </button>
+                  </motion.div>
+                ) : (
+                  <>
+                    {/* Instruction — soft & mysterious */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                      className="text-center"
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-[0.25em] text-base-text-secondary/40 mb-2">
+                        bầu trời và đại dương đều đang chờ
+                      </p>
+                      <p className="text-sm text-base-text-secondary/60">
+                        Vuốt lên để hoá thành sao bay lên bầu trời,{" "}
+                        <br className="hidden sm:block" />
+                        hoặc vuốt xuống để hoá thành bong bóng chìm xuống đại dương
+                      </p>
+                    </motion.div>
 
-                {/* Gesture widget — hướng kéo quyết định đích đến, không
-                    còn bị khoá cứng theo lựa chọn ban đầu ở /write nữa */}
-                <ReleaseGesture type={savedType} onReleased={handleReleased} />
+                    {/* Gesture widget — hướng kéo quyết định đích đến, không
+                        còn bị khoá cứng theo lựa chọn ban đầu ở /write nữa */}
+                    <ReleaseGesture type={savedType} onReleased={handleReleased} />
 
-                {/* Subtle pulsing hint */}
-                <motion.p
-                  animate={{ opacity: [0.3, 0.6, 0.3] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className="text-[11px] text-base-text-secondary/40"
-                >
-                  ↑ bầu trời &nbsp;·&nbsp; đại dương ↓
-                </motion.p>
+                    {/* Subtle pulsing hint */}
+                    <motion.p
+                      animate={{ opacity: [0.3, 0.6, 0.3] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                      className="text-[11px] text-base-text-secondary/40"
+                    >
+                      ↑ bầu trời &nbsp;·&nbsp; đại dương ↓
+                    </motion.p>
+                  </>
+                )}
               </motion.div>
             ) : (
               <motion.div
@@ -214,32 +269,43 @@ export default function RitualPage() {
                   Cảm ơn bạn đã dũng cảm chia sẻ 💛
                 </motion.p>
 
-                {/* Auto-redirect indicator */}
+                {/* "Solace đồng hành" — phản hồi tự động cá nhân hoá, KHÔNG
+                    phải người thật (ghi rõ để không tạo hiểu lầm) */}
+                {!highRisk && companionNote && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.65, duration: 0.5 }}
+                    className="mt-5 w-full rounded-2xl border border-white/8 bg-white/[0.03] p-4 text-left"
+                  >
+                    <p className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.15em] text-purple-300/70">
+                      <Sparkles size={11} /> Solace đồng hành
+                    </p>
+                    <p className="text-[13px] leading-relaxed text-base-text-secondary/85">
+                      {companionNote}
+                    </p>
+                    <p className="mt-2 text-[10px] text-base-text-secondary/35">
+                      ✦ Phản hồi tự động dựa trên từ khoá, không thay thế một người thật lắng nghe bạn
+                    </p>
+                  </motion.div>
+                )}
+
+                {/* Nút tiếp tục thủ công — thay cho auto-redirect trước đây,
+                    để có thời gian đọc phản hồi đồng hành ở trên trước khi rời đi */}
                 {!highRisk && lowMoodArticles.length === 0 && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ delay: 0.6 }}
-                    className="mt-4 flex items-center gap-2"
+                    transition={{ delay: 0.9 }}
+                    className="mt-5 w-full"
                   >
-                    <motion.div
-                      className="h-1 w-24 rounded-full bg-white/10 overflow-hidden"
+                    <Button
+                      accent={isStar ? "sky" : "ocean"}
+                      onClick={() => router.push("/explore")}
+                      className="w-full font-bold"
                     >
-                      <motion.div
-                        className="h-full rounded-full"
-                        style={{
-                          background: isStar
-                            ? "rgba(245,214,125,0.6)"
-                            : "rgba(79,209,197,0.6)",
-                        }}
-                        initial={{ width: "0%" }}
-                        animate={{ width: "100%" }}
-                        transition={{ duration: 2, ease: "linear" }}
-                      />
-                    </motion.div>
-                    <p className="text-[10px] text-base-text-secondary/40">
-                      Đang đưa bạn đến không gian...
-                    </p>
+                      Khám phá không gian →
+                    </Button>
                   </motion.div>
                 )}
 

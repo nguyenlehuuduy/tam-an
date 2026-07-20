@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Mở http://localhost:3000 — sẽ tự chuyển vào Bước 1 (Check-in).
+Mở http://localhost:3000 — vào thẳng không gian Khám phá (`/explore`), không cần đăng nhập hay check-in trước. Check-in giờ chỉ là một lời mời không bắt buộc ngay trong `/explore`; đăng nhập chỉ cần thiết cho các tính năng gắn với tài khoản cá nhân (ví dụ: giữ an toàn/đồng bộ dữ liệu Dashboard khi đổi thiết bị) — banner tương ứng xuất hiện ngay trong `/dashboard` cho Guest.
 
 `npm run build && npm run start` để chạy bản production.
 

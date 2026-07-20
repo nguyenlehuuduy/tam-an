@@ -7,9 +7,17 @@ import { useAppState } from "@/context/AppStateContext";
 
 /**
  * Root page — redirect logic:
- * - Chưa đăng nhập → /auth (mời tạo tài khoản, hoặc bỏ qua để dùng Guest)
- * - Đã đăng nhập nhưng chưa tuỳ chỉnh hồ sơ → /profile-setup (Module 1.2)
- * - Đã đăng nhập và đã xong hồ sơ → /checkin (vào app luôn)
+ * - Đã đăng nhập nhưng chưa tuỳ chỉnh hồ sơ → /profile-setup (Module 1.2,
+ *   vẫn là bước bắt buộc một lần duy nhất cho Registered user).
+ * - Mọi trường hợp còn lại (Guest, hoặc Registered đã xong hồ sơ) → thẳng
+ *   vào /explore. Trước đây Guest bị bắt qua /auth mỗi lần vào lại app (vì
+ *   không có gì đánh dấu "đã từng chọn Guest"), và mọi người đều bị ép qua
+ *   /checkin trước khi thấy được không gian — nay bỏ hẳn 2 rào cản này để
+ *   ai cũng có thể trải nghiệm /explore ngay lập tức. Đăng nhập chỉ còn
+ *   cần thiết cho các tính năng gắn với tài khoản cá nhân (xem banner
+ *   trong /dashboard), không còn là điều kiện để vào không gian chung hay
+ *   để gửi phản hồi/thả câu chuyện — những thao tác đó vẫn ẩn danh hoàn
+ *   toàn như trước.
  */
 export default function RootPage() {
   const router = useRouter();
@@ -18,10 +26,10 @@ export default function RootPage() {
 
   useEffect(() => {
     if (!authHydrated || !appHydrated) return;
-    if (isAuthenticated) {
-      router.replace(profileSetupComplete ? "/checkin" : "/profile-setup");
+    if (isAuthenticated && !profileSetupComplete) {
+      router.replace("/profile-setup");
     } else {
-      router.replace("/auth");
+      router.replace("/explore");
     }
   }, [authHydrated, appHydrated, isAuthenticated, profileSetupComplete, router]);
 

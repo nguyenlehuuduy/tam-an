@@ -238,7 +238,7 @@ export default function SettingsPage() {
             </p>
           ) : (
             <Link
-              href="/auth"
+              href="/auth?next=/settings"
               className="inline-block text-[12px] font-semibold text-sky-aurora underline underline-offset-4 hover:text-sky-glow"
             >
               {t("settings.account.loginCta")}

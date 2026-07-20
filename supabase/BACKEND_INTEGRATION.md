@@ -138,6 +138,36 @@ supabase
   .subscribe();
 ```
 
-## 8. Thứ tự khuyến nghị
+## 9. Email thật khi có phản hồi — hoàn thành lời hứa của gate đăng nhập ở `/ritual`
+
+*Lưu ý: mục 2–4 ở trên mô tả trạng thái TRƯỚC KHI Supabase được nối — thực
+tế `lib/supabaseClient.ts` và `lib/storiesApi.ts` đã được tạo và
+`releaseDraft()`/`sendReaction()` trong `context/AppStateContext.tsx` ĐÃ lưu
+thật lên Supabase (tự lùi về localStorage nếu lỗi). Mục này chỉ nói riêng
+về phần EMAIL — phần duy nhất còn là mô phỏng.*
+
+Từ khi `/ritual` yêu cầu đăng nhập để thả câu chuyện (lý do: "để bạn nhận
+được thông báo khi có người phản hồi"), lời hứa đó cần có thứ gì đứng sau
+nó. Scaffolding đã có sẵn ở `supabase/functions/notify-reaction/index.ts`
+— một Supabase Edge Function (Deno), CHƯA deploy/kích hoạt. Các bước để
+nối thật:
+
+1. Tạo tài khoản [resend.com](https://resend.com) (có gói miễn phí), xác
+   minh một domain gửi (hoặc dùng domain test của Resend khi phát triển).
+2. Lấy API key từ Resend Dashboard.
+3. Deploy function: `supabase functions deploy notify-reaction`.
+4. Set secrets: `supabase secrets set RESEND_API_KEY=re_... RESEND_FROM_EMAIL="Solace <hello@your-domain.com>"`.
+5. Trong Supabase Dashboard → Database → Webhooks → tạo webhook mới:
+   bảng `reactions`, sự kiện `INSERT`, loại `HTTP Request`, URL trỏ tới
+   endpoint của function vừa deploy.
+6. Test: gửi một reaction thật tới một story có `author_id` (tức là do
+   Registered user thả) — kiểm tra email có tới hộp thư không.
+
+An toàn: function dùng `service_role key` (không bao giờ lộ ra client) để
+tra cứu email tác giả qua `supabase.auth.admin.getUserById()` — bỏ qua
+hoàn toàn các story do Guest thả (`author_id` null), đúng với việc chỉ
+Registered user mới có thể thả câu chuyện từ giờ.
+
+## 10. Thứ tự khuyến nghị
 
 Theo đúng ưu tiên đã ghi trong tai-lieu-du-an mục 5.3 và Sprint 1-3: chạy schema + xác thực thật + kiểm duyệt thật trước (rủi ro cao nhất vì đây là app sức khoẻ tinh thần), rồi mới tới real-time/email, cuối cùng là nội dung Thư viện được chuyên gia thẩm định.

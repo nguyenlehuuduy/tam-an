@@ -19,13 +19,17 @@ import {
   BookOpen,
   Settings as SettingsIcon,
   Library,
+  ShieldAlert,
 } from "lucide-react";
 import { useAppState } from "@/context/AppStateContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { SupportButton } from "@/components/ui/SupportButton";
+import { MoreMenu } from "@/components/ui/MoreMenu";
 import { FeedbackNudge } from "@/components/feedback/FeedbackNudge";
 import { Story, quietViewsFor } from "@/lib/mockSignals";
 import { suggestArticlesForMood, getArticleTranslation, CATEGORY_LABELS } from "@/lib/libraryContent";
+import { GroundingExercise } from "@/components/wellbeing/GroundingExercise";
 import clsx from "clsx";
 
 // =====================================================
@@ -74,7 +78,7 @@ function formatDateLabel(key: string): string {
 }
 
 export default function DashboardPage() {
-  const { moodHistory, userStories } = useAppState();
+  const { moodHistory, userStories, identity } = useAppState();
   const { language } = useLanguage();
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const now = useRef(new Date()).current;
@@ -83,6 +87,11 @@ export default function DashboardPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [breathOpen, setBreathOpen] = useState(false);
   const [breathPhase, setBreathPhase] = useState<"in" | "hold" | "out">("in");
+  // Đây là tính năng cá nhân đầu tiên Guest có thể chạm tới không cần đăng
+  // nhập (dữ liệu vẫn chỉ nằm trên thiết bị này) — chỉ NHẮC NHỞ, không
+  // chặn: đăng nhập giờ chỉ cần thiết nếu muốn giữ an toàn dữ liệu này khi
+  // đổi thiết bị/xoá trình duyệt, không phải điều kiện để xem Dashboard.
+  const [guestNoticeDismissed, setGuestNoticeDismissed] = useState(false);
 
   // ---- Gộp dữ liệu theo ngày ----
   const moodByDay = useMemo(() => {
@@ -132,6 +141,17 @@ export default function DashboardPage() {
   }, [moodByDay, now]);
 
   const weekCheckinCount = weekDays.filter((d) => d.value !== null).length;
+
+  // ---- "Hành trình của bạn tuần này" — recap gọn, dùng lại dữ liệu cục bộ
+  // đã có sẵn (không cần thêm nguồn dữ liệu mới) — spec retention 7.x ----
+  const weekStories = useMemo(() => {
+    const cutoff = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+    return userStories.filter((s) => s.createdAt >= cutoff);
+  }, [userStories, now]);
+  const weekWarmthReceived = useMemo(
+    () => weekStories.reduce((sum, s) => sum + s.reactionCount, 0),
+    [weekStories]
+  );
 
   // ---- Module 5.3 — gợi ý bài viết từ Thư viện theo mood pattern gần đây ----
   const recentMoodAvg = useMemo(() => {
@@ -248,31 +268,24 @@ export default function DashboardPage() {
   return (
     <div className="min-h-dvh bg-base-gradient px-4 py-8 md:px-8">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex items-center justify-between gap-2">
           <Link
             href="/explore"
-            className="inline-flex items-center gap-2 text-sm text-base-text-secondary hover:text-base-text-primary transition-colors"
+            className="inline-flex min-w-0 items-center gap-2 text-sm text-base-text-secondary hover:text-base-text-primary transition-colors"
           >
-            <ArrowLeft size={16} /> Quay lại không gian khám phá
+            <ArrowLeft size={16} className="shrink-0" />
+            <span className="sm:hidden">Quay lại</span>
+            <span className="hidden sm:inline">Quay lại không gian khám phá</span>
           </Link>
-          <div className="flex items-center gap-1.5">
-            <Link
-              href="/library"
-              aria-label="Thư viện kiến thức"
-              className="orb-btn flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.04] text-base-text-secondary/70 hover:bg-white/10 hover:text-base-text-primary transition-colors"
-              style={{ minHeight: 0 }}
-            >
-              <Library size={15} />
-            </Link>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <SupportButton />
             <NotificationBell />
-            <Link
-              href="/settings"
-              aria-label="Cài đặt"
-              className="orb-btn flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.04] text-base-text-secondary/70 hover:bg-white/10 hover:text-base-text-primary transition-colors"
-              style={{ minHeight: 0 }}
-            >
-              <SettingsIcon size={15} />
-            </Link>
+            <MoreMenu
+              items={[
+                { href: "/library", label: "Thư viện kiến thức", icon: Library },
+                { href: "/settings", label: "Cài đặt", icon: SettingsIcon },
+              ]}
+            />
           </div>
         </div>
 
@@ -285,7 +298,77 @@ export default function DashboardPage() {
           </p>
         </header>
 
+        <AnimatePresence>
+          {identity.kind === "guest" && !guestNoticeDismissed && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-6 flex items-center gap-3 rounded-2xl border border-sky-aurora/25 bg-sky-aurora/8 px-4 py-3"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-aurora/20 text-sky-aurora">
+                <ShieldAlert size={16} />
+              </span>
+              <p className="flex-1 text-[12.5px] leading-snug text-base-text-primary/90">
+                Bạn đang dùng chế độ ẩn danh — dữ liệu này chỉ lưu trên thiết bị hiện tại. Đăng nhập nếu bạn muốn giữ an toàn và đồng bộ khi đổi thiết bị.
+              </p>
+              <Link
+                href="/auth?next=/dashboard"
+                className="orb-btn shrink-0 rounded-full bg-sky-aurora/20 px-3 py-1.5 text-[11px] font-bold text-sky-aurora hover:bg-sky-aurora/30 transition-colors"
+                style={{ minHeight: 0 }}
+              >
+                Đăng nhập
+              </Link>
+              <button
+                onClick={() => setGuestNoticeDismissed(true)}
+                aria-label="Đóng"
+                className="orb-btn shrink-0 text-base-text-secondary/40 hover:text-base-text-secondary transition-colors"
+                style={{ minHeight: 0 }}
+              >
+                <X size={14} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <FeedbackNudge />
+
+        {/* ======================================================
+            "HÀNH TRÌNH CỦA BẠN TUẦN NÀY" — recap gọn, dùng lại dữ liệu cục
+            bộ đã có (không cần nguồn dữ liệu mới), đặt nổi bật ở đầu trang
+            để tạo một khoảnh khắc "nhìn lại" mỗi lần ghé Dashboard — mục
+            tiêu retention, góc nhìn người dùng cuối.
+            ====================================================== */}
+        <section className="mb-8 rounded-card border border-white/8 bg-gradient-to-br from-sky-violet/15 via-white/[0.03] to-ocean-teal/10 p-5 backdrop-blur">
+          <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-base-text-secondary/50">
+            ✦ Hành trình của bạn tuần này
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="rounded-2xl border border-white/6 bg-white/[0.03] px-3 py-3 text-center">
+              <p className="text-xl">{moodMeta(recentMoodAvg).emoji}</p>
+              <p className="mt-1 text-[10px] font-semibold text-base-text-secondary/55">
+                Cảm xúc chủ đạo
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/6 bg-white/[0.03] px-3 py-3 text-center">
+              <p className="text-xl font-black text-base-text-primary">{weekCheckinCount}/7</p>
+              <p className="mt-1 text-[10px] font-semibold text-base-text-secondary/55">Ngày check-in</p>
+            </div>
+            <div className="rounded-2xl border border-white/6 bg-white/[0.03] px-3 py-3 text-center">
+              <p className="text-xl font-black text-base-text-primary">{weekStories.length}</p>
+              <p className="mt-1 text-[10px] font-semibold text-base-text-secondary/55">Câu chuyện đã thả</p>
+            </div>
+            <div className="rounded-2xl border border-white/6 bg-white/[0.03] px-3 py-3 text-center">
+              <p className="text-xl font-black text-base-text-primary">{weekWarmthReceived}</p>
+              <p className="mt-1 text-[10px] font-semibold text-base-text-secondary/55">Tia sáng nhận được</p>
+            </div>
+          </div>
+          <p className="mt-3.5 text-[12px] leading-relaxed text-base-text-secondary/60">
+            {weekCheckinCount === 0 && weekStories.length === 0
+              ? "Tuần này bạn chưa ghé qua nhiều — không sao cả, quay lại lúc nào cũng được, không có gì để \"bù\" hay lo lắng."
+              : "Dù nhiều hay ít, mỗi lần bạn ghé qua đều là một phần của hành trình chăm sóc bản thân — cứ tiếp tục theo nhịp của riêng bạn."}
+          </p>
+        </section>
 
         {/* ======================================================
             4.1 — EMOTION CALENDAR
@@ -596,7 +679,7 @@ export default function DashboardPage() {
           <h2 className="mb-3 text-sm font-semibold tracking-wider uppercase text-base-text-secondary flex items-center gap-2">
             <Feather size={16} className="text-ocean-aqua" /> Gợi ý cho bạn lúc này
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Breathing exercise */}
             <div className="rounded-card border border-base-divider bg-base-surface/40 p-4 backdrop-blur flex flex-col items-center text-center gap-3">
               <Wind size={18} className="text-sky-aurora" />
@@ -637,6 +720,9 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
+
+            {/* Grounding exercise 5-4-3-2-1 */}
+            <GroundingExercise />
 
             {/* Journaling prompt */}
             <Link

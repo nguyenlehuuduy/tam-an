@@ -3,11 +3,12 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Star, Waves, ChevronLeft, Sparkles, Feather, Heart, Headphones, Settings } from "lucide-react";
+import { Star, Waves, ChevronLeft, Sparkles, Feather, Heart, Headphones, Settings, Lock } from "lucide-react";
 import Link from "next/link";
 import { useAppState } from "@/context/AppStateContext";
 import { AnonymousIdentityBadge } from "@/components/onboarding/AnonymousIdentityBadge";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { SupportButton } from "@/components/ui/SupportButton";
 import clsx from "clsx";
 
 const CHAR_LIMIT = 300;
@@ -96,7 +97,7 @@ const DESTINATION_HINTS = {
 
 export default function WritePage() {
   const router = useRouter();
-  const { draft, setDraftContent, setDraftType, mood } = useAppState();
+  const { draft, setDraftContent, setDraftType, mood, identity } = useAppState();
   const [phase, setPhase] = useState<Phase>("intro");
   const [promptIdx, setPromptIdx] = useState(0);
   const [showPromptHint, setShowPromptHint] = useState(true);
@@ -240,6 +241,7 @@ export default function WritePage() {
           </button>
           <div className="flex items-center gap-1.5">
             <AnonymousIdentityBadge compact />
+            <SupportButton />
             <NotificationBell />
             <Link
               href="/settings"
@@ -339,6 +341,22 @@ export default function WritePage() {
                   <Headphones size={14} />
                   Hôm nay mình chỉ muốn lắng nghe
                 </button>
+
+                {/* Báo trước NGAY TỪ ĐẦU (không phải chỉ ở cuối sau khi đã
+                    viết xong) — để Guest quyết định sớm, tránh cảm giác đầu
+                    tư công sức viết rồi mới gặp tường chắn đăng nhập. Viết
+                    vẫn hoàn toàn tự do, không mất gì nếu chưa muốn đăng nhập. */}
+                {identity.kind === "guest" && (
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.55 }}
+                    className="flex items-center justify-center gap-1.5 text-center text-[10.5px] leading-relaxed text-base-text-secondary/45"
+                  >
+                    <Lock size={10} className="shrink-0" />
+                    Viết thoải mái trước — bước thả cuối cùng sẽ cần đăng nhập để bạn nhận thông báo khi có người phản hồi
+                  </motion.p>
+                )}
               </motion.div>
 
               <motion.p

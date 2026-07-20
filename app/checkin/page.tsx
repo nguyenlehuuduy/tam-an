@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useReducedMotion } from "framer-motion";
 import { SkyCanvas } from "@/components/canvas/SkyCanvas";
 import { MoodSlider } from "@/components/onboarding/MoodSlider";
 import { AnonymousIdentityBadge } from "@/components/onboarding/AnonymousIdentityBadge";
+import { SupportButton } from "@/components/ui/SupportButton";
 import { useAppState } from "@/context/AppStateContext";
 
 // =====================================================
@@ -43,6 +44,12 @@ const STORY_GLIMPSES = [
 const LIVE_COUNT_BASE = 247;
 type Phase = "intro" | "mood";
 
+// Lệch pha nhẹ giữa các thẻ tâm sự trôi nổi — để chúng "thở" không đồng bộ
+// với nhau, tránh cảm giác máy móc khi tất cả cùng lên xuống một nhịp.
+function driftPhase(id: number): number {
+  return Math.abs(Math.sin(id * 12.9898)) * 2;
+}
+
 // =====================================================
 // Lời chào theo thời điểm trong ngày — thay cho eyebrow tĩnh "một không
 // gian để", để trang có cảm giác "biết bạn đang ở đây lúc này" thay vì
@@ -55,6 +62,17 @@ function getTimeGreeting(hour: number): string {
   if (hour < 18) return "Chiều nay, một không gian để";
   if (hour < 22) return "Buổi tối rồi, một không gian để";
   return "Đêm khuya rồi, một không gian để";
+}
+
+// Sắc nền đổi rất nhẹ theo khung giờ thật — chi tiết nhỏ để không gian có
+// cảm giác "biết bạn đang ở đây lúc này", cùng tinh thần với getTimeGreeting
+// nhưng áp cho màu thay vì chữ. Cố tình giữ opacity rất thấp để không phá
+// vỡ bảng màu tím-xanh gốc của SkyCanvas, chỉ là một lớp ám màu mỏng.
+function getTimeTint(hour: number): string {
+  if (hour >= 5 && hour < 8) return "rgba(255,183,120,0.09)"; // bình minh — cam vàng nhẹ
+  if (hour >= 8 && hour < 17) return "rgba(124,158,255,0.05)"; // ban ngày — xanh nhẹ
+  if (hour >= 17 && hour < 20) return "rgba(255,140,105,0.11)"; // hoàng hôn — cam ấm
+  return "rgba(88,58,148,0.13)"; // đêm — tím sâu
 }
 
 // Lời hồi đáp đồng cảm ngay sau khi chọn mood — chạm đúng vào cảm xúc thay
@@ -76,6 +94,17 @@ function moodAcknowledgment(value: number): string {
   }
 }
 
+// "Bạn không cô đơn" — số người khác cũng chọn mức cảm xúc tương tự hôm
+// nay. MÔ PHỎNG (seeded theo ngày + mức mood, không phải số liệu thật từ
+// server) — mục đích tạo cảm giác kết nối, không phải thống kê chính xác.
+// Ổn định trong cùng một ngày, đổi nhẹ giữa các ngày khác nhau.
+function similarMoodCount(value: number): number {
+  const dayIdx = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
+  const raw = Math.sin(dayIdx * 12.9898 + value * 78.233) * 10000;
+  const frac = Math.abs(raw - Math.floor(raw));
+  return 40 + Math.floor(frac * 160); // 40–199
+}
+
 export default function CheckinPage() {
   const router = useRouter();
   const { mood, setMood } = useAppState();
@@ -83,7 +112,9 @@ export default function CheckinPage() {
   const [phase, setPhase] = useState<Phase>("intro");
   const [mounted, setMounted] = useState(false);
   const [greeting, setGreeting] = useState("một không gian để");
+  const [timeTint, setTimeTint] = useState("rgba(88,58,148,0.13)");
   const [glimpseIdx, setGlimpseIdx] = useState(0);
+  const prefersReducedMotion = useReducedMotion();
 
   // Mouse parallax cho hero
   const mouseX = useMotionValue(0);
@@ -92,10 +123,39 @@ export default function CheckinPage() {
   const springY = useSpring(mouseY, { stiffness: 50, damping: 20 });
   const parallaxX = useTransform(springX, [-0.5, 0.5], [-12, 12]);
   const parallaxY = useTransform(springY, [-0.5, 0.5], [-8, 8]);
+  // Cùng nguồn springX/springY nhưng phóng biên độ lớn hơn nhiều — SkyCanvas
+  // tự nhân thêm các hệ số nhỏ (0.05–0.22) cho từng lớp nền (nebula, dải
+  // ngân hà, star field, sao băng) để tạo độ sâu nhiều lớp, xem
+  // components/canvas/SkyCanvas.tsx. Trước đây trang này không truyền
+  // mouseX/mouseY vào SkyCanvas nên toàn bộ hiệu ứng lớp sâu đó chưa từng
+  // chạy — chỉ khối chữ ở giữa mới di chuyển theo chuột.
+  const canvasParallaxX = useTransform(springX, [-0.5, 0.5], [-260, 260]);
+  const canvasParallaxY = useTransform(springY, [-0.5, 0.5], [-260, 260]);
+
+  // Vệt sáng đi theo con trỏ chuột — lò xo trễ hơn (stiffness thấp hơn) để
+  // có cảm giác "đuổi theo" mơ màng thay vì bám sát 1:1 như springX/Y.
+  const cursorX = useMotionValue(0);
+  const cursorY = useMotionValue(0);
+  const cursorSpringX = useSpring(cursorX, { stiffness: 40, damping: 18 });
+  const cursorSpringY = useSpring(cursorY, { stiffness: 40, damping: 18 });
+  const [cursorActive, setCursorActive] = useState(false);
+
+  // Vào nhanh — ví dụ từ banner nhắc check-in ở /explore (?quick=1), hứa
+  // hẹn "chỉ mất 10 giây" nên bỏ qua thẳng phase intro (hero + hoạt ảnh),
+  // vào ngay phase chọn mood. Đọc thủ công (không dùng useSearchParams) để
+  // khỏi cần bọc Suspense riêng cho trang này — cùng cách làm với /explore.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("quick") === "1") {
+      setPhase("mood");
+    }
+  }, []);
 
   useEffect(() => {
     setMounted(true);
-    setGreeting(getTimeGreeting(new Date().getHours()));
+    const hour = new Date().getHours();
+    setGreeting(getTimeGreeting(hour));
+    setTimeTint(getTimeTint(hour));
   }, []);
 
   // Live count fluctuation — chỉ client side
@@ -122,21 +182,50 @@ export default function CheckinPage() {
   // Parallax mouse tracking
   function handleMouseMove(e: React.MouseEvent) {
     const { clientX, clientY, currentTarget } = e;
-    const { width, height } = (currentTarget as HTMLElement).getBoundingClientRect();
-    mouseX.set(clientX / width - 0.5);
-    mouseY.set(clientY / height - 0.5);
+    const rect = (currentTarget as HTMLElement).getBoundingClientRect();
+    mouseX.set(clientX / rect.width - 0.5);
+    mouseY.set(clientY / rect.height - 0.5);
+    // Vệt sáng theo chuột — toạ độ tương đối trong khung, không cần chờ
+    // hydrate xong vì chỉ set khi thực sự có sự kiện di chuột.
+    cursorX.set(clientX - rect.left);
+    cursorY.set(clientY - rect.top);
+    if (!cursorActive) setCursorActive(true);
   }
 
   const canContinue = mood !== null;
 
   return (
-    <SkyCanvas>
+    <SkyCanvas mouseX={canvasParallaxX} mouseY={canvasParallaxY}>
       <div
         className="relative flex min-h-dvh w-full flex-col overflow-hidden"
         onMouseMove={handleMouseMove}
       >
+        {/* Sắc nền theo khung giờ thật — xem getTimeTint() ở trên */}
+        <div
+          className="pointer-events-none absolute inset-0 z-0 transition-colors duration-[2000ms] ease-in-out"
+          style={{ background: `radial-gradient(ellipse at 50% 35%, ${timeTint} 0%, transparent 70%)` }}
+        />
+
+        {/* Vệt sáng theo con trỏ chuột — chỉ khi không giảm chuyển động và
+            đã có ít nhất một lần di chuột (tránh chớp ở góc trên-trái) */}
+        {!prefersReducedMotion && (
+          <motion.div
+            className="pointer-events-none absolute z-0 h-72 w-72 rounded-full blur-[70px]"
+            animate={{ opacity: cursorActive ? 0.5 : 0 }}
+            transition={{ duration: 0.6 }}
+            style={{
+              left: cursorSpringX,
+              top: cursorSpringY,
+              x: "-50%",
+              y: "-50%",
+              background: "radial-gradient(circle, rgba(162,119,255,0.35), transparent 70%)",
+            }}
+          />
+        )}
+
         {/* Identity Badge — luôn hiển thị */}
-        <div className="absolute right-4 top-4 z-30 md:right-6 md:top-5">
+        <div className="absolute right-4 top-4 z-30 flex items-center gap-1.5 md:right-6 md:top-5">
+          <SupportButton />
           <AnonymousIdentityBadge compact />
         </div>
 
@@ -166,20 +255,31 @@ export default function CheckinPage() {
                   style={{ top: s.y, left: s.x, rotate: `${s.rotate}deg` }}
                   whileHover={{ scale: 1.04, transition: { duration: 0.25 } }}
                 >
-                  <div
-                    className="rounded-2xl border border-white/10 bg-white/5 px-3.5 py-2.5 backdrop-blur-sm"
-                    style={{ filter: "blur(2px)" }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.filter = "blur(0px)";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.filter = "blur(2px)";
-                    }}
+                  {/* Trôi nổi liên tục, lệch pha theo từng thẻ — cảm giác
+                      "đang sống" thay vì đứng yên tuyệt đối chờ hover */}
+                  <motion.div
+                    animate={prefersReducedMotion ? undefined : { y: [0, -7, 0] }}
+                    transition={
+                      prefersReducedMotion
+                        ? undefined
+                        : { duration: 4.5 + driftPhase(s.id), repeat: Infinity, ease: "easeInOut", delay: s.delay + 0.9 }
+                    }
                   >
-                    <p className="text-[11px] leading-relaxed text-white/45 font-medium italic">
-                      "{s.text}"
-                    </p>
-                  </div>
+                    <div
+                      className="rounded-2xl border border-white/10 bg-white/5 px-3.5 py-2.5 backdrop-blur-sm"
+                      style={{ filter: "blur(2px)" }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.filter = "blur(0px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.filter = "blur(2px)";
+                      }}
+                    >
+                      <p className="text-[11px] leading-relaxed text-white/45 font-medium italic">
+                        "{s.text}"
+                      </p>
+                    </div>
+                  </motion.div>
                 </motion.div>
               ))}
 
@@ -249,8 +349,8 @@ export default function CheckinPage() {
                   </motion.p>
 
                   <motion.h1
-                    initial={{ opacity: 0, y: 28 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, y: 28, filter: "blur(10px)" }}
+                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                     transition={{ delay: 0.42, duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
                     className="font-display font-black leading-[1.08] tracking-tight text-base-text-primary"
                     style={{ fontSize: "clamp(2.4rem, 6vw, 3.8rem)" }}
@@ -259,8 +359,8 @@ export default function CheckinPage() {
                   </motion.h1>
 
                   <motion.h1
-                    initial={{ opacity: 0, y: 28 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, y: 28, filter: "blur(10px)" }}
+                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                     transition={{ delay: 0.56, duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
                     className="font-display font-black leading-[1.08] tracking-tight shimmer-text"
                     style={{ fontSize: "clamp(2.4rem, 6vw, 3.8rem)" }}
@@ -269,8 +369,8 @@ export default function CheckinPage() {
                   </motion.h1>
 
                   <motion.h1
-                    initial={{ opacity: 0, y: 28 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, y: 28, filter: "blur(10px)" }}
+                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                     transition={{ delay: 0.7, duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
                     className="font-display font-black leading-[1.08] tracking-tight text-base-text-primary"
                     style={{ fontSize: "clamp(2.4rem, 6vw, 3.8rem)" }}
@@ -415,6 +515,22 @@ export default function CheckinPage() {
                   )}
                 </AnimatePresence>
 
+                {/* "Bạn không cô đơn" — mô phỏng, không phải số liệu thật */}
+                <AnimatePresence mode="wait">
+                  {canContinue && mood !== null && mounted && (
+                    <motion.p
+                      key={`similar-${mood}`}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 0.55, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.4, delay: 0.25 }}
+                      className="mt-1.5 text-center text-[11px] text-base-text-secondary"
+                    >
+                      ✦ {similarMoodCount(mood)} người khác cũng đang chọn mức cảm xúc này hôm nay
+                    </motion.p>
+                  )}
+                </AnimatePresence>
+
                 {/* Continue button — chỉ hiện khi đã chọn mood */}
                 <AnimatePresence>
                   {canContinue && (
@@ -434,7 +550,7 @@ export default function CheckinPage() {
                       <motion.button
                         whileHover={{ scale: 1.03 }}
                         whileTap={{ scale: 0.97 }}
-                        onClick={() => router.push("/write")}
+                        onClick={() => router.push("/explore")}
                         className="orb-btn relative w-full overflow-hidden rounded-full py-4 text-[15px] font-bold text-base-text-primary"
                         style={{
                           minHeight: 0,
@@ -448,9 +564,19 @@ export default function CheckinPage() {
                           style={{ borderRadius: "inherit" }}
                         />
                         <span className="relative flex items-center justify-center gap-2">
-                          ✨ Tiếp tục → Chia sẻ nỗi lòng
+                          ✨ Xong, quay lại khám phá
                         </span>
                       </motion.button>
+
+                      {/* Lựa chọn phụ — check-in giờ không còn ép viết ngay,
+                          nhưng ai muốn viết luôn thì vẫn đi thẳng được */}
+                      <button
+                        onClick={() => router.push("/write")}
+                        className="orb-btn mt-3 w-full text-center text-xs text-base-text-secondary/50 hover:text-base-text-secondary transition-colors py-1.5"
+                        style={{ minHeight: 0 }}
+                      >
+                        Hoặc viết ra điều gì đó ngay →
+                      </button>
                     </motion.div>
                   )}
                 </AnimatePresence>
